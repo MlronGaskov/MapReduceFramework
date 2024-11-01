@@ -95,7 +95,7 @@ class WordCountITCase {
 
         HashMap<String, Integer> mappersResult = new HashMap<>();
         for (int i = 0; i < mappersCount; ++i) {
-            for (int j = 0; j < reducersCount; ++j) {
+            for (int j = 0; j < reducersCount - 1; ++j) {
                 readResult(
                         mappersOutputPath.toString() + "/mapper-output-" + i + "-" + j + ".txt",
                         mappersResult);
