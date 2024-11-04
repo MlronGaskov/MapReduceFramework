@@ -72,7 +72,7 @@ public class WebLinkGraphITCase {
         Path outputAnswersPath = Path.of(testSettings.outputAnswersPath);
 
 
-        List<Path> inputFiles = Files.list(inputFilesPath).toList();
+        List<Path> inputFiles = Files.list(inputFilesPath).sorted(Comparator.comparing(Path::getFileName)).toList();
 
         MapReduceJob<String, String, String, List<String>> job = new MapReduceJob<>(
                 new ReverseWebLinkMapper(),
@@ -96,7 +96,7 @@ public class WebLinkGraphITCase {
         mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
         List<Path> mapperFiles = List.of(Files.list(mappersOutputPath).toArray(Path[]::new));
-        List<Path> mapperAnswerFiles = List.of(Files.list(mapperAnswersPath).toArray(Path[]::new));
+        List<Path> mapperAnswerFiles = List.of(Files.list(mapperAnswersPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
         assertEquals(mapperFiles.size(), mapperAnswerFiles.size());
 
         for (int i= 0; i<mapperFiles.size(); i++) {
@@ -104,7 +104,7 @@ public class WebLinkGraphITCase {
         }
 
         List<Path> reducerFiles = List.of(Files.list(reducersOutputPath).toArray(Path[]::new));
-        List<Path> outputAnswerFiles = List.of(Files.list(outputAnswersPath).toArray(Path[]::new));
+        List<Path> outputAnswerFiles = List.of(Files.list(outputAnswersPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
         assertEquals(reducerFiles.size(), outputAnswerFiles.size());
 
         for (int i= 0; i<reducerFiles.size(); i++) {
