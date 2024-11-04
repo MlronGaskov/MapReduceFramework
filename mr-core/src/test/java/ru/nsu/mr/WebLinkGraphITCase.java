@@ -1,11 +1,14 @@
 package ru.nsu.mr;
 
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import ru.nsu.mr.config.Configuration;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +24,21 @@ import static ru.nsu.mr.config.ConfigurationOption.MAPPERS_COUNT;
 import static ru.nsu.mr.config.ConfigurationOption.REDUCERS_COUNT;
 
 public class WebLinkGraphITCase {
+    private Path reducersOutputPath;
+    private Path mappersOutputPath;
+
+    @BeforeEach
+    public void setUp() throws IOException {
+        reducersOutputPath = Files.createTempDirectory("outputs");
+        mappersOutputPath = Files.createTempDirectory("mappers_outputs");
+    }
+
+    @AfterEach
+    public void tearDown() throws IOException {
+        deleteDirectory(reducersOutputPath);
+        deleteDirectory(mappersOutputPath);
+    }
+
 
     static class ReverseWebLinkMapper implements Mapper<String, String, String, String> {
         @Override
@@ -50,8 +68,6 @@ public class WebLinkGraphITCase {
     @MethodSource ("webLinkGraphParameters")
     public void testReverseWebLinkGraph(WebLinkGraphSettings testSettings) throws IOException {
         Path inputFilesPath = Path.of(testSettings.inputFilesPath);
-        Path mappersOutputPath = Path.of(testSettings.mappersOutputPath);
-        Path reducersOutputPath = Path.of(testSettings.reducersOutputPath);
         Path mapperAnswersPath = Path.of(testSettings.mapperAnswersPath);
         Path outputAnswersPath = Path.of(testSettings.outputAnswersPath);
 
@@ -101,32 +117,23 @@ public class WebLinkGraphITCase {
         int mappersCount;
         int reducersCount;
         String inputFilesPath;
-        String mappersOutputPath;
-        String reducersOutputPath;
         String mapperAnswersPath;
         String outputAnswersPath;
 
-        WebLinkGraphSettings(int mappersCount, int reducersCount, String inputFilesPath,
-                             String mappersOutputPath, String reducersOutputPath, String mapperAnswersPath,
+        WebLinkGraphSettings(int mappersCount, int reducersCount, String inputFilesPath, String mapperAnswersPath,
                              String outputAnswersPath) throws IOException {
             this.mappersCount = mappersCount;
             this.reducersCount = reducersCount;
             this.inputFilesPath = inputFilesPath;
-            this.mappersOutputPath = mappersOutputPath;
-            this.reducersOutputPath = reducersOutputPath;
             this.mapperAnswersPath = mapperAnswersPath;
             this.outputAnswersPath = outputAnswersPath;
 
-            clearDirectory(mappersOutputPath);
-            clearDirectory(reducersOutputPath);
         }
     }
 
     static Stream<WebLinkGraphSettings> webLinkGraphParameters() throws IOException {
         return Stream.of(
                 new WebLinkGraphSettings(3, 3,"src/test/resources/WebLinkGraphITCase/InputFiles",
-                        "src/test/resources/WebLinkGraphITCase/MapperOutputFiles",
-                        "src/test/resources/WebLinkGraphITCase/OutputFiles",
                         "src/test/resources/WebLinkGraphITCase/AnswerFiles/Mapper",
                         "src/test/resources/WebLinkGraphITCase/AnswerFiles/Output")
         );
@@ -147,19 +154,9 @@ public class WebLinkGraphITCase {
         }
     }
 
-    private static void clearDirectory(String directoryPath) throws IOException {
-        Path path = Paths.get(directoryPath);
+    private void deleteDirectory(Path path) throws IOException {
         try (Stream<Path> pathStream = Files.walk(path)) {
-            pathStream.sorted(Comparator.reverseOrder())
-                    .forEach(p -> {
-                        if (!p.equals(path)){
-                            try {
-                                Files.delete(p);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                    });
+            pathStream.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
         }
     }
 }
