@@ -1,3 +1,0 @@
-http://example.com/pageC [http://example.com/pageA, http://example.com/pageH, http://example.com/pageI, http://example.com/pageD, http://example.com/pageE, http://example.com/pageF]
-http://example.com/pageF [http://example.com/pageD, http://example.com/pageH, http://example.com/pageE, http://example.com/pageB, http://example.com/pageA, http://example.com/pageI]
-http://example.com/pageI [http://example.com/pageJ, http://example.com/pageF, http://example.com/pageA, http://example.com/pageH, http://example.com/pageB]

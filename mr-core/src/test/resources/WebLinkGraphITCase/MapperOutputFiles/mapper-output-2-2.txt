@@ -1,7 +1,0 @@
-http://example.com/pageA http://example.com/pageI
-http://example.com/pageA http://example.com/pageJ
-http://example.com/pageD http://example.com/pageA
-http://example.com/pageD http://example.com/pageC
-http://example.com/pageG http://example.com/pageB
-http://example.com/pageJ http://example.com/pageG
-http://example.com/pageJ http://example.com/pageF
