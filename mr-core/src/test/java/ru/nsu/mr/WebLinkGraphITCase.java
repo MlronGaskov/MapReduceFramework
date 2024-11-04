@@ -95,7 +95,7 @@ public class WebLinkGraphITCase {
         MapReduceRunner<String, String, String, List<String>> mr = new MapReduceSequentialRunner<>();
         mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
-        List<Path> mapperFiles = List.of(Files.list(mappersOutputPath).toArray(Path[]::new));
+        List<Path> mapperFiles = List.of(Files.list(mappersOutputPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
         List<Path> mapperAnswerFiles = List.of(Files.list(mapperAnswersPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
         assertEquals(mapperFiles.size(), mapperAnswerFiles.size());
 
@@ -103,7 +103,7 @@ public class WebLinkGraphITCase {
             compareFileContents(mapperFiles.get(i), mapperAnswerFiles.get(i));
         }
 
-        List<Path> reducerFiles = List.of(Files.list(reducersOutputPath).toArray(Path[]::new));
+        List<Path> reducerFiles = List.of(Files.list(reducersOutputPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
         List<Path> outputAnswerFiles = List.of(Files.list(outputAnswersPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
         assertEquals(reducerFiles.size(), outputAnswerFiles.size());
 
