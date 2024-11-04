@@ -124,11 +124,11 @@ public class WebLinkGraphITCase {
 
     static Stream<WebLinkGraphSettings> webLinkGraphParameters() throws IOException {
         return Stream.of(
-                new WebLinkGraphSettings(3, 3,"C:/MapReduceFiles/InputFiles",
-                        "C:/MapReduceFiles/MapperOutputFiles",
-                        "C:/MapReduceFiles/OutputFiles",
-                        "C:/MapReduceFiles/AnswerFiles/Mapper",
-                        "C:/MapReduceFiles/AnswerFiles/Output")
+                new WebLinkGraphSettings(3, 3,"src/test/resources/WebLinkGraphITCase/InputFiles",
+                        "src/test/resources/WebLinkGraphITCase/MapperOutputFiles",
+                        "src/test/resources/WebLinkGraphITCase/OutputFiles",
+                        "src/test/resources/WebLinkGraphITCase/AnswerFiles/Mapper",
+                        "src/test/resources/WebLinkGraphITCase/AnswerFiles/Output")
         );
     }
 
