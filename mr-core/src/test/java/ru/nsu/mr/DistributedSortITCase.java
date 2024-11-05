@@ -100,33 +100,21 @@ class DistributedSortITCase {
     }
 
     private void checkResult(SortConfig config, Path outputPath) throws IOException {
-        Map<String, List<String>> sortedResults = new HashMap<>();
+        List<String> sortedResults = new ArrayList<>();
         for (int i = 0; i < config.reducersCount; ++i) {
             readSortedResult(outputPath.toString() + "/output-" + i + ".txt", sortedResults);
         }
 
-        // Проверка на сортировку и группировку
-        List<String> keys = new ArrayList<>(sortedResults.keySet());
-        Collections.sort(keys);  // Сортируем ключи для сравнения
-
-        for (String key : keys) {
-            List<String> values = sortedResults.get(key);
-            for (String value : values) {
-                System.out.println(key + " " + value);  // Печать для отладки, можно убрать в финальной версии
-            }
-        }
-
         // Проверка, что каждый ключ присутствует в итоговых данных
-        for (int i = 0; i < config.fileCount * config.recordsPerFile; i++) {
-            String expectedKey = "key:" + (i % 3);  // Предполагается, что ключи повторяются (key0, key1, key2)
-            assertTrue(sortedResults.containsKey(expectedKey), "Expected key not found: " + expectedKey);
+        for (int i = 0; i < config.recordsPerFile; i++) {
+            String expectedKey = "key:" + i;
+            assertTrue(sortedResults.contains(expectedKey), "Expected key not found: " + expectedKey);
         }
 
-        // Проверка, что значения для каждого ключа - в ожидаемом количестве
-        for (String key : keys) {
-            int expectedCount = (config.fileCount * config.recordsPerFile) / 3;  // Каждого ключа должно быть ровно на 3
-            assertEquals(expectedCount, sortedResults.get(key).size(), "Count mismatch for key: " + key);
-        }
+        List<String> keys = new ArrayList<>(sortedResults);
+        Collections.sort(keys);
+        assertEquals(keys, sortedResults);
+
     }
 
     public static class SortConfig {
@@ -169,7 +157,7 @@ class DistributedSortITCase {
             Path tempFile = Files.createTempFile("InputFile" + i, ".txt");
             try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
                 for (int j = 0; j < recordsPerFile; j++) {
-                    writer.write("key:" + (ThreadLocalRandom.current().nextInt(0, 10)) + " " + j);
+                    writer.write("key:" + (ThreadLocalRandom.current().nextInt(0, recordsPerFile)) + " " + j);
                     writer.newLine();
                 }
             }
@@ -178,12 +166,12 @@ class DistributedSortITCase {
         return inputFiles;
     }
 
-    public static void readSortedResult(String filename, Map<String, List<String>> result) throws IOException {
+    public static void readSortedResult(String filename, List<String> result) throws IOException {
         try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split(" ", 2);
-                result.computeIfAbsent(parts[0], k -> new ArrayList<>()).add(parts[1]);
+                result.add(parts[0]);
             }
         }
     }
