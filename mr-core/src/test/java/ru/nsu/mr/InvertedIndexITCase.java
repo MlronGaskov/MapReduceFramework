@@ -140,6 +140,16 @@ class InvertedIndexITCase {
         final int inputFilesCount = DOCUMENTS.length;
         final int mappersCount = 2; // Количество мапперов
         final int reducersCount = 2; // Количество редьюсеров
+
+        @Override
+        public String toString() {
+            return "M = "
+                    + mappersCount
+                    + ", R = "
+                    + reducersCount
+                    + ", files = "
+                    + inputFilesCount;
+        }
     }
 
     static Stream<InvertedIndexConfig> invertedIndexParameters() {
