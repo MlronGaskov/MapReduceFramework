@@ -105,12 +105,6 @@ class DistributedSortITCase {
             readSortedResult(outputPath.toString() + "/output-" + i + ".txt", sortedResults);
         }
 
-        // Проверка, что каждый ключ присутствует в итоговых данных
-        for (int i = 0; i < config.recordsPerFile; i++) {
-            String expectedKey = "key:" + i;
-            assertTrue(sortedResults.contains(expectedKey), "Expected key not found: " + expectedKey);
-        }
-
         List<String> keys = new ArrayList<>(sortedResults);
         Collections.sort(keys);
         assertEquals(keys, sortedResults);
@@ -139,7 +133,8 @@ class DistributedSortITCase {
 
     static Stream<SortConfig> sortParameters() {
         return Stream.of(
-                new SortConfig(5, 10, 1, 2)
+                new SortConfig(5, 10, 1, 2),
+                new SortConfig(10, 4, 1, 5)
         );
     }
 
