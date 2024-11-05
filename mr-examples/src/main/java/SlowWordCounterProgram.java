@@ -1,7 +1,6 @@
 import static ru.nsu.mr.PredefinedFunctions.*;
 import static ru.nsu.mr.PredefinedFunctions.STRING_KEY_HASH;
-import static ru.nsu.mr.config.ConfigurationOption.MAPPERS_COUNT;
-import static ru.nsu.mr.config.ConfigurationOption.REDUCERS_COUNT;
+import static ru.nsu.mr.config.ConfigurationOption.*;
 
 import ru.nsu.mr.*;
 import ru.nsu.mr.config.Configuration;
@@ -18,11 +17,13 @@ public class SlowWordCounterProgram {
         Path reducersOutputPath = Files.createTempDirectory("outputs");
         Path mappersOutputPath = Files.createTempDirectory("mappers_outputs");
 
-        int inputFilesCount = 20;
+        int inputFilesCount = 40;
         int eachWordPerFileCount = 10;
-        int mappersCount = 5;
-        int reducersCount = 6;
-        final String[] WORDS = {"apple", "banana", "orange", "grape", "pear", "kiwi", "melon", "peach"};
+        int mappersCount = 10;
+        int reducersCount = 10;
+        final String[] WORDS = {
+            "apple", "banana", "orange", "grape", "pear", "kiwi", "melon", "peach"
+        };
 
         List<Path> inputFiles = generatesInputFiles(inputFilesCount, WORDS, eachWordPerFileCount);
 
@@ -42,13 +43,18 @@ public class SlowWordCounterProgram {
         Configuration config =
                 new Configuration()
                         .set(MAPPERS_COUNT, mappersCount)
-                        .set(REDUCERS_COUNT, reducersCount);
+                        .set(REDUCERS_COUNT, reducersCount)
+                        .set(METRICS_PORT, "8080");
 
         MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
 
+        mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
+
         deleteDirectory(reducersOutputPath);
         deleteDirectory(mappersOutputPath);
-
+        for (Path inputFile : inputFiles) {
+            Files.deleteIfExists(inputFile);
+        }
     }
 
     static class WordCountMapper implements Mapper<String, String, String, Integer> {
@@ -59,7 +65,13 @@ public class SlowWordCounterProgram {
                 Pair<String, String> split = input.next();
                 for (String word : split.value().split("[\\s.,]+")) {
                     output.put(word.trim().toLowerCase(), 1);
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException();
+                    }
                 }
+                System.out.println(split.key());
             }
         }
     }
@@ -71,62 +83,14 @@ public class SlowWordCounterProgram {
             int sum = 0;
             while (values.hasNext()) {
                 sum += values.next();
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException();
+                }
             }
+            System.out.println(sum);
             output.put(key, sum);
-        }
-    }
-
-    public void testWordCounter(WordCounterConfig testConfig) throws IOException {
-        int inputFilesCount = testConfig.inputFilesCount;
-        int eachWordPerFileCount = testConfig.eachWordPerFileCount;
-        int mappersCount = testConfig.mappersCount;
-        int reducersCount = testConfig.reducersCount;
-
-        List<Path> inputFiles =
-                generatesInputFiles(inputFilesCount, testConfig.WORDS, eachWordPerFileCount);
-
-        MapReduceJob<String, Integer, String, Integer> job =
-                new MapReduceJob<>(
-                        new WordCountMapper(),
-                        new WordCountReducer(),
-                        STRING_SERIALIZER,
-                        INTEGER_SERIALIZER,
-                        STRING_DESERIALIZER,
-                        INTEGER_DESERIALIZER,
-                        STRING_SERIALIZER,
-                        INTEGER_SERIALIZER,
-                        STRING_KEY_COMPARATOR,
-                        STRING_KEY_HASH);
-
-        Configuration config =
-                new Configuration()
-                        .set(MAPPERS_COUNT, mappersCount)
-                        .set(REDUCERS_COUNT, reducersCount);
-
-        MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
-
-        mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
-
-        HashMap<String, Integer> mappersResult = new HashMap<>();
-        for (int i = 0; i < mappersCount; ++i) {
-            for (int j = 0; j < reducersCount; ++j) {
-                readResult(
-                        mappersOutputPath.toString() + "/mapper-output-" + i + "-" + j + ".txt",
-                        mappersResult);
-            }
-        }
-        for (String word : testConfig.WORDS) {
-            int wordCntResult = mappersResult.get(word);
-            assertEquals(inputFilesCount * eachWordPerFileCount, wordCntResult);
-        }
-
-        HashMap<String, Integer> reducesResult = new HashMap<>();
-        for (int i = 0; i < reducersCount; ++i) {
-            readResult(reducersOutputPath.toString() + "/output-" + i + ".txt", reducesResult);
-        }
-        for (String word : testConfig.WORDS) {
-            int wordCntResult = reducesResult.get(word);
-            assertEquals(inputFilesCount * eachWordPerFileCount, wordCntResult);
         }
     }
 

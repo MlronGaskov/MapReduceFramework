@@ -2,6 +2,9 @@ package ru.nsu.mr;
 
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
+import ru.nsu.mr.endpoints.CoordinatorEndpoint;
+import ru.nsu.mr.endpoints.LoggerWithMetricsCalculation;
+import ru.nsu.mr.endpoints.MetricsService;
 import ru.nsu.mr.sinks.FileSink;
 import ru.nsu.mr.sinks.FileSystemSink;
 import ru.nsu.mr.sinks.PartitionedFileSink;
@@ -22,10 +25,14 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
     private Configuration configuration;
     private Path outputDirectory;
     private Path mappersOutputPath;
+    private Logger logger;
+    private String jobId;
 
     public MapReduceSequentialRunner() {}
 
     private void mapperJob(List<Path> filesToMap, int mapperId) throws IOException {
+        logger.mapTaskStart(jobId, mapperId);
+
         List<FileSystemSink<KEY_INTER, VALUE_INTER>> sortedFileSinks = new ArrayList<>();
         for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); ++i) {
             sortedFileSinks.add(
@@ -82,9 +89,12 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
                                 });
             }
         }
+        logger.mapTaskFinish(jobId, mapperId);
     }
 
     private void reduceJob(List<Path> mappersOutputFiles, int reducerId) throws IOException {
+        logger.reduceTaskStart(jobId, reducerId);
+
         List<Iterator<Pair<KEY_INTER, VALUE_INTER>>> fileIterators = new ArrayList<>();
         for (Path mappersOutputFile : mappersOutputFiles) {
             fileIterators.add(
@@ -118,6 +128,8 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
                                 });
             }
         }
+
+        logger.reduceTaskFinish(jobId, reducerId);
     }
 
     @Override
@@ -131,6 +143,26 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
         this.configuration = configuration;
         this.outputDirectory = outputDirectory;
         this.mappersOutputPath = mappersOutputDirectory;
+        this.logger = new LoggerWithMetricsCalculation();
+        CoordinatorEndpoint endpoint = null;
+
+        if (!configuration.get(ConfigurationOption.METRICS_PORT).isEmpty()) {
+            try {
+                endpoint =
+                        new CoordinatorEndpoint(
+                                configuration.get(ConfigurationOption.METRICS_PORT),
+                                (MetricsService) this.logger);
+                endpoint.start();
+            } catch (IOException e) {
+                throw new RuntimeException();
+            }
+        }
+
+        //jobId = LocalDateTime.now().toString();
+        jobId = "1";
+        
+        logger.jobAdd(jobId);
+        logger.jobStart(jobId);
 
         int mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
 
@@ -161,6 +193,12 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
             } catch (IOException e) {
                 throw new RuntimeException();
             }
+        }
+
+        logger.jobFinish(jobId);
+
+        if (endpoint != null) {
+            endpoint.stop();
         }
     }
 }
