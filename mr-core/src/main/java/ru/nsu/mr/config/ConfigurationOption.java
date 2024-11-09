@@ -13,6 +13,9 @@ public class ConfigurationOption<T> {
     public static ConfigurationOption<Integer> SORTER_IN_MEMORY_RECORDS =
             new ConfigurationOption<>("sorter.memory.n-records", 10000);
 
+    public static ConfigurationOption<String> METRICS_PORT =
+            new ConfigurationOption<>("endpoints.metrics.port", "");
+
     public ConfigurationOption(String name, T defaultValue) {
         this.name = name;
         this.defaultValue = defaultValue;

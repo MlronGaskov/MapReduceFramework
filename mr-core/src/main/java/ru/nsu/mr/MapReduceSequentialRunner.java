@@ -2,6 +2,9 @@ package ru.nsu.mr;
 
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
+import ru.nsu.mr.endpoints.CoordinatorEndpoint;
+import ru.nsu.mr.endpoints.LoggerWithMetricsCalculation;
+import ru.nsu.mr.endpoints.MetricsService;
 import ru.nsu.mr.sinks.FileSink;
 import ru.nsu.mr.sinks.FileSystemSink;
 import ru.nsu.mr.sinks.PartitionedFileSink;
@@ -22,6 +25,8 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
     private Configuration configuration;
     private Path outputDirectory;
     private Path mappersOutputPath;
+    private Logger logger;
+    private String jobId;
 
     public MapReduceSequentialRunner() {}
 
@@ -82,6 +87,7 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
                                 });
             }
         }
+        logger.mapTaskFinish(jobId);
     }
 
     private void reduceJob(List<Path> mappersOutputFiles, int reducerId) throws IOException {
@@ -118,6 +124,8 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
                                 });
             }
         }
+
+        logger.reduceTaskFinish(jobId);
     }
 
     @Override
@@ -131,6 +139,25 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
         this.configuration = configuration;
         this.outputDirectory = outputDirectory;
         this.mappersOutputPath = mappersOutputDirectory;
+        this.logger = new LoggerWithMetricsCalculation();
+        CoordinatorEndpoint endpoint = null;
+
+        if (!configuration.get(ConfigurationOption.METRICS_PORT).isEmpty()) {
+            try {
+                endpoint =
+                        new CoordinatorEndpoint(
+                                configuration.get(ConfigurationOption.METRICS_PORT),
+                                (MetricsService) this.logger);
+                endpoint.start();
+            } catch (IOException e) {
+                throw new RuntimeException();
+            }
+        }
+
+        jobId = "1";
+
+        logger.jobReceived(jobId, jobId);
+        logger.jobStart(jobId);
 
         int mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
 
@@ -161,6 +188,12 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
             } catch (IOException e) {
                 throw new RuntimeException();
             }
+        }
+
+        logger.jobFinish(jobId);
+
+        if (endpoint != null) {
+            endpoint.stop();
         }
     }
 }
