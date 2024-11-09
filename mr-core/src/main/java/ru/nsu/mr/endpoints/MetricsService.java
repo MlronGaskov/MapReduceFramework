@@ -1,12 +1,12 @@
 package ru.nsu.mr.endpoints;
 
-import ru.nsu.mr.endpoints.data.Job;
-import ru.nsu.mr.endpoints.data.JobInfo;
+import ru.nsu.mr.endpoints.dto.JobDetails;
+import ru.nsu.mr.endpoints.dto.JobSummary;
 
 import java.util.List;
 
 public interface MetricsService {
-    List<Job> getJobs();
+    List<JobSummary> getJobs();
 
-    JobInfo getJobInfo(String dateTime);
+    JobDetails getJobDetails(String jobId);
 }

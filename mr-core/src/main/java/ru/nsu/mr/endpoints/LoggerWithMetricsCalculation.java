@@ -1,32 +1,34 @@
 package ru.nsu.mr.endpoints;
 
 import ru.nsu.mr.Logger;
-import ru.nsu.mr.endpoints.data.Job;
-import ru.nsu.mr.endpoints.data.JobInfo;
+import ru.nsu.mr.endpoints.dto.JobDetails;
+import ru.nsu.mr.endpoints.dto.JobState;
+import ru.nsu.mr.endpoints.dto.JobSummary;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class LoggerWithMetricsCalculation implements MetricsService, Logger {
-    private static class JobEntry {
-        private final String jobStartDate;
-        private String status;
+
+    private static class Job {
+        private final String jobId;
+        private final String jobName;
         private int finishedMapTasksCount = 0;
         private int finishedReduceTasksCount = 0;
+        private JobState state;
 
-        public JobEntry(String date) {
-            this.jobStartDate = date;
-            this.status = "PENDING";
+        public Job(String jobId, String jobName) {
+            this.jobId = jobId;
+            this.jobName = jobName;
+            this.state = JobState.QUEUED;
         }
 
         public void start() {
-            status = "IN_PROGRESS";
+            this.state = JobState.RUNNING;
         }
 
-        public void finished() {
-            status = "COMPLETED";
+        public void complete() {
+            this.state = JobState.COMPLETED;
         }
 
         public void mapTaskFinished() {
@@ -38,76 +40,50 @@ public class LoggerWithMetricsCalculation implements MetricsService, Logger {
         }
     }
 
-    List<JobEntry> jobs = new ArrayList<>();
+    private final Map<String, Job> jobs = new HashMap<>();
 
     @Override
-    public void jobAdd(String jobStartDate) {
-        jobs.add(new JobEntry(jobStartDate));
+    public void jobReceived(String jobId, String jobName) {
+        Job job = new Job(jobId, jobName);
+        jobs.put(job.jobId, job);
     }
 
     @Override
-    public void jobStart(String jobStartDate) {
-        for (JobEntry job : jobs) {
-            if (Objects.equals(job.jobStartDate, jobStartDate)) {
-                job.start();
-            }
-        }
+    public void jobStart(String jobId) {
+        jobs.get(jobId).start();
     }
 
     @Override
-    public void mapTaskStart(String jobStartDate, int taskId) {}
-
-    @Override
-    public void mapTaskFinish(String jobStartDate, int taskId) {
-        for (JobEntry job : jobs) {
-            if (Objects.equals(job.jobStartDate, jobStartDate)) {
-                job.mapTaskFinished();
-            }
-        }
+    public void mapTaskFinish(String jobId) {
+        jobs.get(jobId).mapTaskFinished();
     }
 
     @Override
-    public void reduceTaskStart(String jobStartDate, int taskId) {}
-
-    @Override
-    public void reduceTaskFinish(String jobStartDate, int taskId) {
-        for (JobEntry job : jobs) {
-            if (Objects.equals(job.jobStartDate, jobStartDate)) {
-                job.reduceTaskFinished();
-            }
-        }
+    public void reduceTaskFinish(String jobId) {
+        jobs.get(jobId).reduceTaskFinished();
     }
 
     @Override
-    public void jobFinish(String jobStartDate) {
-        for (JobEntry job : jobs) {
-            if (Objects.equals(job.jobStartDate, jobStartDate)) {
-                job.finished();
-            }
-        }
+    public void jobFinish(String jobId) {
+        jobs.get(jobId).complete();
     }
 
     @Override
-    public List<Job> getJobs() {
-        List<Job> jobsToReturn = new ArrayList<>();
-        for (JobEntry job : jobs) {
-            jobsToReturn.add(new Job(job.jobStartDate, job.status));
-        }
-        jobsToReturn.sort(Comparator.comparing(Job::date));
-        return jobsToReturn;
+    public List<JobSummary> getJobs() {
+        return jobs.values().stream()
+                .map(job -> new JobSummary(job.jobId, job.jobName, job.state))
+                .collect(Collectors.toList());
     }
 
     @Override
-    public JobInfo getJobInfo(String jobStartDate) {
-        for (JobEntry job : jobs) {
-            if (Objects.equals(job.jobStartDate, jobStartDate)) {
-                return new JobInfo(
-                        job.jobStartDate,
-                        job.status,
-                        job.finishedMapTasksCount,
-                        job.finishedReduceTasksCount);
-            }
-        }
-        return null;
+    public JobDetails getJobDetails(String jobId) {
+        Job job = jobs.get(jobId);
+        if (job == null) return null;
+        return new JobDetails(
+                job.jobId,
+                job.jobName,
+                job.state,
+                job.finishedMapTasksCount,
+                job.finishedReduceTasksCount);
     }
 }

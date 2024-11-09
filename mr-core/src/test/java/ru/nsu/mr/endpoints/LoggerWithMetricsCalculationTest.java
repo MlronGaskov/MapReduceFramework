@@ -6,88 +6,75 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.Test;
 
 import ru.nsu.mr.Logger;
-import ru.nsu.mr.endpoints.data.Job;
-import ru.nsu.mr.endpoints.data.JobInfo;
+import ru.nsu.mr.endpoints.dto.JobDetails;
+import ru.nsu.mr.endpoints.dto.JobState;
+import ru.nsu.mr.endpoints.dto.JobSummary;
 
 import java.util.List;
 
 public class LoggerWithMetricsCalculationTest {
     @Test
     public void test() {
-        String job1date = "2024-01-01T01:01";
-        String job2date = "2024-01-01T02:01";
-        String job3date = "2024-01-01T03:01";
+        String job1id = "2024-01-01T01:01";
+        String job2id = "2024-01-01T02:01";
+        String job3id = "2024-01-01T03:01";
 
         Logger logger = new LoggerWithMetricsCalculation();
         MetricsService metricsService = (MetricsService) logger;
 
-        logger.jobAdd(job1date);
-        logger.jobStart(job1date);
-        logger.mapTaskStart(job1date, 0);
-        logger.mapTaskFinish(job1date, 0);
-        logger.reduceTaskStart(job1date, 0);
-        logger.reduceTaskFinish(job1date, 0);
-        logger.jobFinish(job1date);
+        logger.jobReceived(job1id, job1id);
+        logger.jobStart(job1id);
+        logger.mapTaskFinish(job1id);
+        logger.reduceTaskFinish(job1id);
+        logger.jobFinish(job1id);
 
-        JobInfo job1Info = metricsService.getJobInfo(job1date);
+        JobDetails job1Info = metricsService.getJobDetails(job1id);
         assertNotNull(job1Info);
-        assertEquals("COMPLETED", job1Info.status());
+        assertEquals(JobState.COMPLETED, job1Info.state());
         assertEquals(1, job1Info.completedMapJobs());
         assertEquals(1, job1Info.completedReduceJobs());
 
-        logger.jobAdd(job2date);
-        logger.jobAdd(job3date);
+        logger.jobReceived(job2id, job2id);
+        logger.jobReceived(job3id, job3id);
 
-        logger.jobStart(job2date);
-        logger.jobStart(job3date);
+        logger.jobStart(job2id);
+        logger.jobStart(job3id);
 
-        logger.mapTaskStart(job2date, 0);
-        logger.mapTaskStart(job2date, 1);
-        logger.mapTaskStart(job2date, 2);
-        logger.mapTaskStart(job3date, 0);
-        logger.mapTaskFinish(job2date, 0);
-        logger.mapTaskFinish(job2date, 1);
-        logger.mapTaskStart(job2date, 3);
-        logger.mapTaskStart(job3date, 1);
-        logger.mapTaskFinish(job2date, 3);
-        logger.mapTaskFinish(job2date, 2);
-        logger.mapTaskFinish(job3date, 0);
-        logger.mapTaskFinish(job3date, 1);
+        logger.mapTaskFinish(job2id);
+        logger.mapTaskFinish(job2id);
+        logger.mapTaskFinish(job2id);
+        logger.mapTaskFinish(job2id);
+        logger.mapTaskFinish(job3id);
+        logger.mapTaskFinish(job3id);
+        logger.reduceTaskFinish(job3id);
+        logger.reduceTaskFinish(job3id);
+        logger.jobFinish(job3id);
 
-        logger.reduceTaskStart(job2date, 0);
-        logger.reduceTaskStart(job2date, 1);
-
-        logger.reduceTaskStart(job3date, 0);
-        logger.reduceTaskStart(job3date, 1);
-        logger.reduceTaskFinish(job3date, 1);
-        logger.reduceTaskFinish(job3date, 0);
-        logger.jobFinish(job3date);
-
-        JobInfo job2Info = metricsService.getJobInfo(job2date);
+        JobDetails job2Info = metricsService.getJobDetails(job2id);
         assertNotNull(job2Info);
-        assertEquals("IN_PROGRESS", job2Info.status());
+        assertEquals(JobState.RUNNING, job2Info.state());
         assertEquals(4, job2Info.completedMapJobs());
         assertEquals(0, job2Info.completedReduceJobs());
 
-        JobInfo job3Info = metricsService.getJobInfo(job3date);
+        JobDetails job3Info = metricsService.getJobDetails(job3id);
         assertNotNull(job3Info);
-        assertEquals("COMPLETED", job3Info.status());
+        assertEquals(JobState.COMPLETED, job3Info.state());
         assertEquals(2, job3Info.completedMapJobs());
         assertEquals(2, job3Info.completedReduceJobs());
 
-        logger.reduceTaskFinish(job2date, 1);
-        logger.reduceTaskFinish(job2date, 0);
-        logger.jobFinish(job2date);
+        logger.reduceTaskFinish(job2id);
+        logger.reduceTaskFinish(job2id);
+        logger.jobFinish(job2id);
 
-        logger.reduceTaskFinish(job2date, 1);
-        logger.jobFinish(job2date);
-        job2Info = metricsService.getJobInfo(job2date);
-        assertEquals("COMPLETED", job2Info.status());
+        logger.reduceTaskFinish(job2id);
+        logger.jobFinish(job2id);
+        job2Info = metricsService.getJobDetails(job2id);
+        assertEquals(JobState.COMPLETED, job2Info.state());
 
-        List<Job> jobs = metricsService.getJobs();
-        assertEquals(3, jobs.size());
-        assertEquals(job1date, jobs.get(0).date());
-        assertEquals(job2date, jobs.get(1).date());
-        assertEquals(job3date, jobs.get(2).date());
+        List<JobSummary> jobSummaries = metricsService.getJobs();
+        assertEquals(3, jobSummaries.size());
+        assertEquals(job1id, jobSummaries.get(0).jobId());
+        assertEquals(job2id, jobSummaries.get(1).jobId());
+        assertEquals(job3id, jobSummaries.get(2).jobId());
     }
 }

@@ -5,8 +5,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
-import ru.nsu.mr.endpoints.data.Job;
-import ru.nsu.mr.endpoints.data.JobInfo;
+import ru.nsu.mr.endpoints.dto.JobDetails;
+import ru.nsu.mr.endpoints.dto.JobSummary;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -32,7 +32,7 @@ public class CoordinatorEndpoint {
 
     private void configureEndpoints() {
         server.createContext("/jobs", new GetJobsHandler());
-        server.createContext("/jobs/", new GetJobByDateHandler());
+        server.createContext("/jobs/", new GetJobByIdHandler());
     }
 
     public void start() {
@@ -73,12 +73,12 @@ public class CoordinatorEndpoint {
                 return;
             }
 
-            List<Job> jobs = metricsService.getJobs();
-            sendJsonResponse(exchange, HTTP_OK, jobs);
+            List<JobSummary> jobSummaries = metricsService.getJobs();
+            sendJsonResponse(exchange, HTTP_OK, jobSummaries);
         }
     }
 
-    private class GetJobByDateHandler implements HttpHandler {
+    private class GetJobByIdHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -87,19 +87,19 @@ public class CoordinatorEndpoint {
             }
 
             String path = exchange.getRequestURI().getPath();
-            String dateString = path.substring("/jobs/".length());
+            String idString = path.substring("/jobs/".length());
 
             try {
-                JobInfo jobInfo = metricsService.getJobInfo(dateString);
-                if (jobInfo == null) {
+                JobDetails jobDetails = metricsService.getJobDetails(idString);
+                if (jobDetails == null) {
                     sendErrorResponse(
-                            exchange, HTTP_NOT_FOUND, "Job not found for date: " + dateString);
+                            exchange, HTTP_NOT_FOUND, "Job not found for id: " + idString);
                     return;
                 }
-                sendJsonResponse(exchange, HTTP_OK, jobInfo);
+                sendJsonResponse(exchange, HTTP_OK, jobDetails);
 
             } catch (IllegalArgumentException e) {
-                sendErrorResponse(exchange, HTTP_BAD_REQUEST, "Invalid date format: " + dateString);
+                sendErrorResponse(exchange, HTTP_BAD_REQUEST, "Invalid id format: " + idString);
             } catch (Exception e) {
                 sendErrorResponse(
                         exchange, HTTP_BAD_REQUEST, "Unable to process request: " + e.getMessage());

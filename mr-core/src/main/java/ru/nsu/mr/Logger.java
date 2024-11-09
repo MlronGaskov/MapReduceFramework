@@ -1,17 +1,13 @@
 package ru.nsu.mr;
 
 public interface Logger {
-    void jobAdd(String jobStartDate);
+    void jobReceived(String jobId, String jobName);
 
-    void jobStart(String jobStartDate);
+    void jobStart(String jobId);
 
-    void mapTaskStart(String jobStartDate, int taskId);
+    void mapTaskFinish(String jobId);
 
-    void mapTaskFinish(String jobStartDate, int taskId);
+    void reduceTaskFinish(String jobId);
 
-    void reduceTaskStart(String jobStartDate, int taskId);
-
-    void reduceTaskFinish(String jobStartDate, int taskId);
-
-    void jobFinish(String jobStartDate);
+    void jobFinish(String jobId);
 }

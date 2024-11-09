@@ -8,8 +8,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import ru.nsu.mr.endpoints.data.Job;
-import ru.nsu.mr.endpoints.data.JobInfo;
+import ru.nsu.mr.endpoints.dto.JobDetails;
+import ru.nsu.mr.endpoints.dto.JobState;
+import ru.nsu.mr.endpoints.dto.JobSummary;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -31,38 +32,38 @@ public class CoordinatorEndpointTest {
                         "8080",
                         new MetricsService() {
                             @Override
-                            public List<Job> getJobs() {
+                            public List<JobSummary> getJobs() {
                                 return List.of(
-                                        new Job(
+                                        new JobSummary(
+                                                "1",
                                                 LocalDateTime.of(2024, 1, 1, 1, 1).toString(),
-                                                "PENDING"),
-                                        new Job(
+                                                JobState.QUEUED),
+                                        new JobSummary(
+                                                "2",
                                                 LocalDateTime.of(2024, 1, 1, 2, 1).toString(),
-                                                "IN_PROGRESS"),
-                                        new Job(
+                                                JobState.RUNNING),
+                                        new JobSummary(
+                                                "3",
                                                 LocalDateTime.of(2024, 1, 1, 3, 1).toString(),
-                                                "FAILED"),
-                                        new Job(
-                                                LocalDateTime.of(2024, 1, 1, 4, 1).toString(),
-                                                "CANCELLED"),
-                                        new Job(
+                                                JobState.FAILED),
+                                        new JobSummary(
+                                                "4",
                                                 LocalDateTime.of(2024, 1, 2, 1, 1).toString(),
-                                                "COMPLETED"));
+                                                JobState.COMPLETED));
                             }
 
                             @Override
-                            public JobInfo getJobInfo(String dateTime) {
+                            public JobDetails getJobDetails(String dateTime) {
                                 return switch (dateTime) {
-                                    case "2024-01-01T01:01" ->
-                                            new JobInfo(dateTime, "PENDING", 0, 0);
-                                    case "2024-01-01T02:01" ->
-                                            new JobInfo(dateTime, "IN_PROGRESS", 4, 2);
-                                    case "2024-01-01T03:01" ->
-                                            new JobInfo(dateTime, "FAILED", 3, 1);
-                                    case "2024-01-01T04:01" ->
-                                            new JobInfo(dateTime, "CANCELLED", 0, 0);
-                                    case "2024-01-02T01:01" ->
-                                            new JobInfo(dateTime, "COMPLETED", 10, 10);
+                                    case "1" ->
+                                            new JobDetails("1", dateTime, JobState.QUEUED, 0, 0);
+                                    case "2" ->
+                                            new JobDetails("2", dateTime, JobState.RUNNING, 4, 2);
+                                    case "3" ->
+                                            new JobDetails("3", dateTime, JobState.FAILED, 3, 1);
+                                    case "4" ->
+                                            new JobDetails(
+                                                    "4", dateTime, JobState.COMPLETED, 10, 10);
                                     default -> throw new IllegalArgumentException();
                                 };
                             }
@@ -83,42 +84,53 @@ public class CoordinatorEndpointTest {
         String response = getResponseContent(connection);
         assertEquals(200, connection.getResponseCode(), "Expected HTTP 200 for /jobs");
 
-        List<Job> expectedJobs =
+        List<JobSummary> expectedJobSummaries =
                 List.of(
-                        new Job(LocalDateTime.of(2024, 1, 1, 1, 1).toString(), "PENDING"),
-                        new Job(LocalDateTime.of(2024, 1, 1, 2, 1).toString(), "IN_PROGRESS"),
-                        new Job(LocalDateTime.of(2024, 1, 1, 3, 1).toString(), "FAILED"),
-                        new Job(LocalDateTime.of(2024, 1, 1, 4, 1).toString(), "CANCELLED"),
-                        new Job(LocalDateTime.of(2024, 1, 2, 1, 1).toString(), "COMPLETED"));
+                        new JobSummary(
+                                "1",
+                                LocalDateTime.of(2024, 1, 1, 1, 1).toString(),
+                                JobState.QUEUED),
+                        new JobSummary(
+                                "2",
+                                LocalDateTime.of(2024, 1, 1, 2, 1).toString(),
+                                JobState.RUNNING),
+                        new JobSummary(
+                                "3",
+                                LocalDateTime.of(2024, 1, 1, 3, 1).toString(),
+                                JobState.FAILED),
+                        new JobSummary(
+                                "4",
+                                LocalDateTime.of(2024, 1, 2, 1, 1).toString(),
+                                JobState.COMPLETED));
 
         assertEquals(
-                gson.toJson(expectedJobs), response, "Job list did not match expected response");
+                gson.toJson(expectedJobSummaries),
+                response,
+                "Job list did not match expected response");
     }
 
     @Test
     public void testJobGet() throws IOException, URISyntaxException {
-        List<JobInfo> testCases =
+        List<JobDetails> testCases =
                 List.of(
-                        new JobInfo("2024-01-01T01:01", "PENDING", 0, 0),
-                        new JobInfo("2024-01-01T02:01", "IN_PROGRESS", 4, 2),
-                        new JobInfo("2024-01-01T03:01", "FAILED", 3, 1),
-                        new JobInfo("2024-01-01T04:01", "CANCELLED", 0, 0),
-                        new JobInfo("2024-01-02T01:01", "COMPLETED", 10, 10));
+                        new JobDetails("1", "1", JobState.QUEUED, 0, 0),
+                        new JobDetails("2", "2", JobState.RUNNING, 4, 2),
+                        new JobDetails("3", "3", JobState.FAILED, 3, 1),
+                        new JobDetails("4", "4", JobState.COMPLETED, 10, 10));
 
-        for (JobInfo expectedJobInfo : testCases) {
-            URI uri = new URI("http://localhost:8080/jobs/" + expectedJobInfo.date());
+        for (JobDetails expectedJobDetails : testCases) {
+            URI uri = new URI("http://localhost:8080/jobs/" + expectedJobDetails.jobId());
             HttpURLConnection connection = openConnection(uri);
-
             assertEquals(
                     200,
                     connection.getResponseCode(),
-                    "Expected HTTP 200 for date: " + expectedJobInfo.date());
+                    "Expected HTTP 200 for date: " + expectedJobDetails.jobId());
 
             String response = getResponseContent(connection);
             assertEquals(
-                    gson.toJson(expectedJobInfo),
+                    gson.toJson(expectedJobDetails),
                     response,
-                    "Response did not match for date: " + expectedJobInfo.date());
+                    "Response did not match for date: " + expectedJobDetails.jobId());
         }
     }
 
