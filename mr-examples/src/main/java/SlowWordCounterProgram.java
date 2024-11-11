@@ -46,9 +46,13 @@ public class SlowWordCounterProgram {
                         .set(REDUCERS_COUNT, reducersCount)
                         .set(METRICS_PORT, "8080");
 
-        MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
+        // MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
 
-        mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
+        // mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
+
+        Worker<String, Integer, String, Integer> worker =
+                new Worker<>(job, config, mappersOutputPath, reducersOutputPath, 8000);
+        worker.start();
 
         deleteDirectory(reducersOutputPath);
         deleteDirectory(mappersOutputPath);
@@ -71,7 +75,6 @@ public class SlowWordCounterProgram {
                         throw new RuntimeException();
                     }
                 }
-                System.out.println(split.key());
             }
         }
     }
@@ -89,7 +92,6 @@ public class SlowWordCounterProgram {
                     throw new RuntimeException();
                 }
             }
-            System.out.println(sum);
             output.put(key, sum);
         }
     }
