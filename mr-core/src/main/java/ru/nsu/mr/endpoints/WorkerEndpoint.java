@@ -5,20 +5,21 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
-import ru.nsu.mr.endpoints.dto.Task;
+import ru.nsu.mr.Worker.Task;
 
 import java.io.*;
 import java.net.InetSocketAddress;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class WorkerEndpoint {
-    private final WorkerManager workerManager;
+    private final Consumer<Task> taskConsumer;
+    private final Supplier<Boolean> isTaskInProgress;
     private final Gson gson = new Gson();
 
-    public WorkerEndpoint(WorkerManager workerManager) {
-        this.workerManager = workerManager;
+    public WorkerEndpoint(Consumer<Task> taskConsumer, Supplier<Boolean> isTaskInProgress) {
+        this.taskConsumer = taskConsumer;
+        this.isTaskInProgress = isTaskInProgress;
     }
 
     public void startServer(int port) throws IOException {
@@ -35,17 +36,13 @@ public class WorkerEndpoint {
             if ("PUT".equals(exchange.getRequestMethod())) {
                 BufferedReader reader =
                         new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
+
                 Task taskRequest = gson.fromJson(reader, Task.class);
 
-                int taskId = taskRequest.getTaskId();
-                WorkerManager.TaskType taskType = taskRequest.getTaskType();
-                List<Path> inputFiles = taskRequest.getInputFiles();
+                taskConsumer.accept(taskRequest);
 
-                Optional<String> error = workerManager.addTask(taskId, taskType, inputFiles);
-
-                String response = error.orElse("Task issued successfully");
-                int statusCode = error.isPresent() ? 409 : 200;
-                exchange.sendResponseHeaders(statusCode, response.getBytes().length);
+                String response = "Task issued successfully";
+                exchange.sendResponseHeaders(200, response.getBytes().length);
                 exchange.getResponseBody().write(response.getBytes());
                 exchange.getResponseBody().close();
             } else {
@@ -57,10 +54,7 @@ public class WorkerEndpoint {
     private class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String response =
-                    workerManager.getCurrentTask().isPresent()
-                            ? "Task in progress"
-                            : "No task in progress";
+            String response = isTaskInProgress.get() ? "Task in progress" : "No task in progress";
             exchange.sendResponseHeaders(200, response.getBytes().length);
             OutputStream os = exchange.getResponseBody();
             os.write(response.getBytes());

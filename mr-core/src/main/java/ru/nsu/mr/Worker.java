@@ -16,14 +16,27 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
-    private MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job;
-    private Configuration configuration;
-    private Path outputDirectory;
-    private Path mappersOutputPath;
-    private final WorkerManager workerManager;
-    private final WorkerEndpoint workerEndpoint;
+
+    public enum TaskType {
+        MAP,
+        REDUCE
+    }
+
+    public static class Task {
+        private int taskId;
+        private String taskType;
+        private List<String> inputFiles;
+    }
+
+    private final MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job;
+    private final Configuration configuration;
+    private final Path outputDirectory;
+    private final Path mappersOutputPath;
+    private final BlockingQueue<Task> taskQueue = new LinkedBlockingQueue<>();
 
     public Worker(
             MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job,
@@ -36,41 +49,38 @@ public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
         this.configuration = configuration;
         this.outputDirectory = outputDirectory;
         this.mappersOutputPath = mappersOutputDirectory;
-        this.workerManager = new WorkerManager();
-        this.workerEndpoint = new WorkerEndpoint(workerManager);
-        this.workerEndpoint.startServer(serverPort);
+        WorkerEndpoint workerEndpoint = new WorkerEndpoint(this::addTask, this::isTaskInProgress);
+        workerEndpoint.startServer(serverPort);
+    }
+
+    public void addTask(Task task) {
+        taskQueue.offer(task);
+    }
+
+    public boolean isTaskInProgress() {
+        return !taskQueue.isEmpty();
     }
 
     public void start() {
         while (!Thread.currentThread().isInterrupted()) {
-            synchronized (workerManager) {
-                while (workerManager.getCurrentTask().isEmpty()) {
-                    try {
-                        workerManager.wait();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                }
+            try {
+                Task task = taskQueue.take();
+                executeTask(task);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
-            executeTasks();
         }
     }
 
-    private void executeTasks() {
-        Optional<WorkerManager.Task> taskOpt = workerManager.getCurrentTask();
-        if (taskOpt.isPresent()) {
-            WorkerManager.Task task = taskOpt.get();
-            try {
-                if (task.getType() == WorkerManager.TaskType.MAP) {
-                    mapperJob(task.getInputFiles(), task.getTaskId());
-                } else if (task.getType() == WorkerManager.TaskType.REDUCE) {
-                    reduceJob(task.getInputFiles(), task.getTaskId());
-                }
-                workerManager.completeCurrentTask();
-            } catch (IOException e) {
-                throw new RuntimeException();
+    private void executeTask(Task task) {
+        try {
+            if (TaskType.valueOf(task.taskType) == TaskType.MAP) {
+                mapperJob(task.inputFiles.stream().map(Path::of).toList(), task.taskId);
+            } else if (TaskType.valueOf(task.taskType) == TaskType.REDUCE) {
+                reduceJob(task.inputFiles.stream().map(Path::of).toList(), task.taskId);
             }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
