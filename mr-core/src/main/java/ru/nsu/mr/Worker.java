@@ -1,36 +1,19 @@
 package ru.nsu.mr;
 
 import ru.nsu.mr.config.Configuration;
-import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.*;
-import ru.nsu.mr.sinks.FileSink;
-import ru.nsu.mr.sinks.FileSystemSink;
-import ru.nsu.mr.sinks.PartitionedFileSink;
-import ru.nsu.mr.sinks.SortedFileSink;
-import ru.nsu.mr.sources.GroupedKeyValuesIterator;
-import ru.nsu.mr.sources.KeyValueFileIterator;
-import ru.nsu.mr.sources.MergedKeyValueIterator;
+import ru.nsu.mr.endpoints.dto.*;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Collectors;
 
 public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
 
-    public enum TaskType {
-        MAP,
-        REDUCE
-    }
-
-    public static class Task {
-        private int taskId;
-        private String taskType;
-        private List<String> inputFiles;
-    }
+    private record Task(int taskId, TaskType taskType, List<Path> inputFiles) {}
 
     private final MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job;
     private final Configuration configuration;
@@ -49,16 +32,37 @@ public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
         this.configuration = configuration;
         this.outputDirectory = outputDirectory;
         this.mappersOutputPath = mappersOutputDirectory;
-        WorkerEndpoint workerEndpoint = new WorkerEndpoint(this::addTask, this::isTaskInProgress);
+
+        WorkerEndpoint workerEndpoint =
+                new WorkerEndpoint(this::createTask, this::getTaskDetails, this::getAllTasks);
         workerEndpoint.startServer(serverPort);
     }
 
-    public void addTask(Task task) {
+    private final Map<Integer, Task> tasks = new HashMap<>();
+
+    public TaskDetails createTask(NewTaskDetails taskDetails) {
+        Task task =
+                new Task(
+                        taskDetails.getTaskId(),
+                        taskDetails.getTaskType(),
+                        taskDetails.getInputFiles());
+        tasks.put(task.taskId(), task);
         taskQueue.offer(task);
+        return new TaskDetails(task.taskId(), task.taskType(), task.inputFiles);
     }
 
-    public boolean isTaskInProgress() {
-        return !taskQueue.isEmpty();
+    public TaskDetails getTaskDetails(String taskId) {
+        Task task = tasks.get(Integer.parseInt(taskId));
+        if (task != null) {
+            return new TaskDetails(task.taskId(), task.taskType(), task.inputFiles);
+        }
+        return null;
+    }
+
+    public List<TaskInfo> getAllTasks() {
+        return tasks.values().stream()
+                .map(task -> new TaskInfo(task.taskId(), task.taskType(), task.inputFiles))
+                .collect(Collectors.toList());
     }
 
     public void start() {
@@ -74,108 +78,15 @@ public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
 
     private void executeTask(Task task) {
         try {
-            if (TaskType.valueOf(task.taskType) == TaskType.MAP) {
-                mapperJob(task.inputFiles.stream().map(Path::of).toList(), task.taskId);
-            } else if (TaskType.valueOf(task.taskType) == TaskType.REDUCE) {
-                reduceJob(task.inputFiles.stream().map(Path::of).toList(), task.taskId);
+            if (task.taskType().equals(TaskType.MAP)) {
+                MapReduceTasksRunner.executeMapperTask(
+                        task.inputFiles(), task.taskId(), mappersOutputPath, configuration, job);
+            } else if (task.taskType().equals(TaskType.REDUCE)) {
+                MapReduceTasksRunner.executeReduceTask(
+                        task.inputFiles(), task.taskId(), outputDirectory, configuration, job);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    private void mapperJob(List<Path> filesToMap, int mapperId) throws IOException {
-        List<FileSystemSink<KEY_INTER, VALUE_INTER>> sortedFileSinks = new ArrayList<>();
-        for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); ++i) {
-            sortedFileSinks.add(
-                    new SortedFileSink<>(
-                            job.getSerializerInterKey(),
-                            job.getSerializerInterValue(),
-                            job.getDeserializerInterKey(),
-                            job.getDeserializerInterValue(),
-                            Files.createFile(
-                                    mappersOutputPath.resolve(
-                                            "mapper-output-" + mapperId + "-" + i + ".txt")),
-                            configuration.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS),
-                            job.getComparator()));
-        }
-        try (PartitionedFileSink<KEY_INTER, VALUE_INTER> partitionedFileSink =
-                new PartitionedFileSink<>(sortedFileSinks, job.getHasher())) {
-            for (Path inputFileToProcess : filesToMap) {
-                BufferedReader reader = Files.newBufferedReader(inputFileToProcess);
-                String line = reader.readLine();
-
-                Iterator<Pair<String, String>> iterator =
-                        new Iterator<>() {
-                            String nextLine = line;
-
-                            @Override
-                            public boolean hasNext() {
-                                return nextLine != null;
-                            }
-
-                            @Override
-                            public Pair<String, String> next() {
-                                if (!hasNext()) {
-                                    throw new RuntimeException();
-                                }
-                                String currentLine = nextLine;
-                                try {
-                                    nextLine = reader.readLine();
-                                } catch (IOException e) {
-                                    throw new RuntimeException();
-                                }
-                                return new Pair<>(inputFileToProcess.toString(), currentLine);
-                            }
-                        };
-
-                job.getMapper()
-                        .map(
-                                iterator,
-                                (outputKey, outputValue) -> {
-                                    try {
-                                        partitionedFileSink.put(outputKey, outputValue);
-                                    } catch (IOException e) {
-                                        throw new RuntimeException();
-                                    }
-                                });
-            }
-        }
-    }
-
-    private void reduceJob(List<Path> mappersOutputFiles, int reducerId) throws IOException {
-        List<Iterator<Pair<KEY_INTER, VALUE_INTER>>> fileIterators = new ArrayList<>();
-        for (Path mappersOutputFile : mappersOutputFiles) {
-            fileIterators.add(
-                    new KeyValueFileIterator<>(
-                            mappersOutputFile,
-                            job.getDeserializerInterKey(),
-                            job.getDeserializerInterValue()));
-        }
-
-        try (FileSink<KEY_OUT, VALUE_OUT> fileSink =
-                        new FileSink<>(
-                                job.getSerializerOutKey(),
-                                job.getSerializerOutValue(),
-                                Files.createFile(
-                                        outputDirectory.resolve("output-" + reducerId + ".txt")));
-                GroupedKeyValuesIterator<KEY_INTER, VALUE_INTER> groupedIterator =
-                        new GroupedKeyValuesIterator<>(
-                                new MergedKeyValueIterator<>(fileIterators, job.getComparator()))) {
-            while (groupedIterator.hasNext()) {
-                Pair<KEY_INTER, Iterator<VALUE_INTER>> currentGroup = groupedIterator.next();
-                job.getReducer()
-                        .reduce(
-                                currentGroup.key(),
-                                currentGroup.value(),
-                                (outputKey, outputValue) -> {
-                                    try {
-                                        fileSink.put(outputKey, outputValue);
-                                    } catch (IOException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                });
-            }
         }
     }
 }

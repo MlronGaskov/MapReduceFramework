@@ -5,60 +5,104 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
-import ru.nsu.mr.Worker.Task;
+import ru.nsu.mr.endpoints.dto.NewTaskDetails;
+import ru.nsu.mr.endpoints.dto.TaskDetails;
+import ru.nsu.mr.endpoints.dto.TaskInfo;
 
 import java.io.*;
 import java.net.InetSocketAddress;
-import java.util.function.Consumer;
+import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class WorkerEndpoint {
-    private final Consumer<Task> taskConsumer;
-    private final Supplier<Boolean> isTaskInProgress;
+    private final Function<NewTaskDetails, TaskDetails> taskCreator;
+    private final Function<String, TaskDetails> taskDetailsRetriever;
+    private final Supplier<List<TaskInfo>> allTasksSupplier;
     private final Gson gson = new Gson();
 
-    public WorkerEndpoint(Consumer<Task> taskConsumer, Supplier<Boolean> isTaskInProgress) {
-        this.taskConsumer = taskConsumer;
-        this.isTaskInProgress = isTaskInProgress;
+    public WorkerEndpoint(
+            Function<NewTaskDetails, TaskDetails> taskCreator,
+            Function<String, TaskDetails> taskDetailsRetriever,
+            Supplier<List<TaskInfo>> allTasksSupplier) {
+        this.taskCreator = taskCreator;
+        this.taskDetailsRetriever = taskDetailsRetriever;
+        this.allTasksSupplier = allTasksSupplier;
     }
 
     public void startServer(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/task/issue", new TaskIssueHandler());
-        server.createContext("/status", new StatusHandler());
+        server.createContext("/tasks", new TasksHandler());
         server.setExecutor(null);
         server.start();
     }
 
-    private class TaskIssueHandler implements HttpHandler {
+    private class TasksHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if ("PUT".equals(exchange.getRequestMethod())) {
-                BufferedReader reader =
-                        new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
+            String requestMethod = exchange.getRequestMethod();
 
-                Task taskRequest = gson.fromJson(reader, Task.class);
-
-                taskConsumer.accept(taskRequest);
-
-                String response = "Task issued successfully";
-                exchange.sendResponseHeaders(200, response.getBytes().length);
-                exchange.getResponseBody().write(response.getBytes());
-                exchange.getResponseBody().close();
+            if ("PUT".equalsIgnoreCase(requestMethod)) {
+                handlePutRequest(exchange);
+            } else if ("GET".equalsIgnoreCase(requestMethod)) {
+                handleGetRequest(exchange);
             } else {
-                exchange.sendResponseHeaders(405, -1);
+                sendResponse(exchange, 405, "Method Not Allowed");
+            }
+        }
+
+        private void handlePutRequest(HttpExchange exchange) throws IOException {
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(exchange.getRequestBody()))) {
+                NewTaskDetails taskRequest = gson.fromJson(reader, NewTaskDetails.class);
+                TaskDetails taskDetails = taskCreator.apply(taskRequest);
+                sendResponse(exchange, 201, gson.toJson(taskDetails));
+            } catch (Exception e) {
+                sendResponse(exchange, 400, "Failed to create task: " + e.getMessage());
+            }
+        }
+
+        private void handleGetRequest(HttpExchange exchange) throws IOException {
+            String path = exchange.getRequestURI().getPath();
+            String[] segments = path.split("/");
+
+            if (segments.length == 2) {
+                handleGetAllTasks(exchange);
+            } else if (segments.length == 3 && !segments[2].isEmpty()) {
+                handleGetTaskById(exchange, segments[2]);
+            } else {
+                sendResponse(exchange, 400, "Invalid request path");
+            }
+        }
+
+        private void handleGetAllTasks(HttpExchange exchange) throws IOException {
+            try {
+                List<TaskInfo> taskInfoList = allTasksSupplier.get();
+                sendResponse(exchange, 200, gson.toJson(taskInfoList));
+            } catch (Exception e) {
+                sendResponse(exchange, 400, "Failed to retrieve tasks: " + e.getMessage());
+            }
+        }
+
+        private void handleGetTaskById(HttpExchange exchange, String taskId) throws IOException {
+            try {
+                TaskDetails taskDetails = taskDetailsRetriever.apply(taskId);
+                if (taskDetails != null) {
+                    sendResponse(exchange, 200, gson.toJson(taskDetails));
+                } else {
+                    sendResponse(exchange, 404, "Task not found");
+                }
+            } catch (Exception e) {
+                sendResponse(exchange, 400, "Failed to retrieve task: " + e.getMessage());
             }
         }
     }
 
-    private class StatusHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            String response = isTaskInProgress.get() ? "Task in progress" : "No task in progress";
-            exchange.sendResponseHeaders(200, response.getBytes().length);
-            OutputStream os = exchange.getResponseBody();
+    private void sendResponse(HttpExchange exchange, int statusCode, String response)
+            throws IOException {
+        exchange.sendResponseHeaders(statusCode, response.getBytes().length);
+        try (OutputStream os = exchange.getResponseBody()) {
             os.write(response.getBytes());
-            os.close();
         }
     }
 }
