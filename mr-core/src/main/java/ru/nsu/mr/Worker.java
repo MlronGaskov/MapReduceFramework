@@ -7,19 +7,66 @@ import ru.nsu.mr.endpoints.dto.*;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.stream.Collectors;
 
 public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
 
-    private record Task(int taskId, TaskType taskType, List<Path> inputFiles) {}
+    private static final class Task {
+        public enum TaskStatus {
+            RUNNING(null),
+            SUCCEED(null),
+            FAILED(null);
+
+            private Exception exception;
+
+            TaskStatus(Exception e) {
+                this.exception = e;
+            }
+
+            private void setException(Exception e) {
+                exception = e;
+            }
+
+            @Override
+            public String toString() {
+                return super.toString() + (exception != null ? ": " + exception.toString() : "");
+            }
+        }
+
+        private final int taskId;
+        private final TaskType taskType;
+        private final List<Path> inputFiles;
+        private TaskStatus status;
+
+        private Task(int taskId, TaskType taskType, List<Path> inputFiles) {
+            this.taskId = taskId;
+            this.taskType = taskType;
+            this.inputFiles = inputFiles;
+            this.status = TaskStatus.RUNNING;
+        }
+
+        private TaskInfo getTaskInfo() {
+            return new TaskInfo(
+                    taskId,
+                    taskType,
+                    inputFiles.stream().map(Object::toString).toList(),
+                    status.toString());
+        }
+
+        private TaskDetails getTaskDetails() {
+            return new TaskDetails(
+                    taskId,
+                    taskType,
+                    inputFiles.stream().map(Object::toString).toList(),
+                    status.toString());
+        }
+    }
 
     private final MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job;
     private final Configuration configuration;
     private final Path outputDirectory;
     private final Path mappersOutputPath;
-    private final BlockingQueue<Task> taskQueue = new LinkedBlockingQueue<>();
+    private volatile Task currentTask = null;
+    private final Map<Integer, Task> previousTasks = new HashMap<>();
 
     public Worker(
             MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job,
@@ -38,55 +85,81 @@ public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
         workerEndpoint.startServer(serverPort);
     }
 
-    private final Map<Integer, Task> tasks = new HashMap<>();
-
-    public TaskDetails createTask(NewTaskDetails taskDetails) {
-        Task task =
+    public synchronized TaskDetails createTask(NewTaskDetails taskDetails) throws RuntimeException {
+        if (currentTask != null) {
+            throw new RuntimeException("the worker is busy");
+        }
+        currentTask =
                 new Task(
-                        taskDetails.getTaskId(),
-                        taskDetails.getTaskType(),
-                        taskDetails.getInputFiles());
-        tasks.put(task.taskId(), task);
-        taskQueue.offer(task);
-        return new TaskDetails(task.taskId(), task.taskType(), task.inputFiles);
+                        taskDetails.taskId(),
+                        taskDetails.taskType(),
+                        taskDetails.inputFiles().stream().map(Path::of).toList());
+        notify();
+        return currentTask.getTaskDetails();
     }
 
-    public TaskDetails getTaskDetails(String taskId) {
-        Task task = tasks.get(Integer.parseInt(taskId));
-        if (task != null) {
-            return new TaskDetails(task.taskId(), task.taskType(), task.inputFiles);
+    public synchronized TaskDetails getTaskDetails(int taskId) {
+        if (currentTask != null && currentTask.taskId == taskId) {
+            return currentTask.getTaskDetails();
+        } else if (previousTasks.containsKey(taskId)) {
+            return previousTasks.get(taskId).getTaskDetails();
         }
         return null;
     }
 
-    public List<TaskInfo> getAllTasks() {
-        return tasks.values().stream()
-                .map(task -> new TaskInfo(task.taskId(), task.taskType(), task.inputFiles))
-                .collect(Collectors.toList());
+    public synchronized List<TaskInfo> getAllTasks() {
+        List<TaskInfo> result =
+                new ArrayList<>(previousTasks.values().stream().map(Task::getTaskInfo).toList());
+        if (currentTask != null) {
+            result.add(currentTask.getTaskInfo());
+        }
+        return result;
+    }
+
+    private synchronized void waitTask() throws InterruptedException {
+        while (currentTask == null) {
+            wait();
+        }
+    }
+
+    private synchronized void moveCurrentTask() {
+        previousTasks.put(currentTask.taskId, currentTask);
+        currentTask = null;
     }
 
     public void start() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                Task task = taskQueue.take();
-                executeTask(task);
+                waitTask();
+                executeTask(currentTask);
+                moveCurrentTask();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
     }
 
+    private synchronized void setCurrentTaskSucceed() {
+        currentTask.status = Task.TaskStatus.SUCCEED;
+    }
+
+    private synchronized void setCurrentTaskFailed(Exception e) {
+        currentTask.status = Task.TaskStatus.FAILED;
+        currentTask.status.setException(e);
+    }
+
     private void executeTask(Task task) {
         try {
-            if (task.taskType().equals(TaskType.MAP)) {
+            if (task.taskType.equals(TaskType.MAP)) {
                 MapReduceTasksRunner.executeMapperTask(
-                        task.inputFiles(), task.taskId(), mappersOutputPath, configuration, job);
-            } else if (task.taskType().equals(TaskType.REDUCE)) {
+                        task.inputFiles, task.taskId, mappersOutputPath, configuration, job);
+            } else if (task.taskType.equals(TaskType.REDUCE)) {
                 MapReduceTasksRunner.executeReduceTask(
-                        task.inputFiles(), task.taskId(), outputDirectory, configuration, job);
+                        task.inputFiles, task.taskId, outputDirectory, configuration, job);
             }
+            setCurrentTaskSucceed();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            setCurrentTaskFailed(e);
         }
     }
 }

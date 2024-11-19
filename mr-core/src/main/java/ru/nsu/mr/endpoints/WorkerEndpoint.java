@@ -17,13 +17,14 @@ import java.util.function.Supplier;
 
 public class WorkerEndpoint {
     private final Function<NewTaskDetails, TaskDetails> taskCreator;
-    private final Function<String, TaskDetails> taskDetailsRetriever;
+    private final Function<Integer, TaskDetails> taskDetailsRetriever;
     private final Supplier<List<TaskInfo>> allTasksSupplier;
     private final Gson gson = new Gson();
+    private HttpServer server;
 
     public WorkerEndpoint(
             Function<NewTaskDetails, TaskDetails> taskCreator,
-            Function<String, TaskDetails> taskDetailsRetriever,
+            Function<Integer, TaskDetails> taskDetailsRetriever,
             Supplier<List<TaskInfo>> allTasksSupplier) {
         this.taskCreator = taskCreator;
         this.taskDetailsRetriever = taskDetailsRetriever;
@@ -31,10 +32,16 @@ public class WorkerEndpoint {
     }
 
     public void startServer(int port) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/tasks", new TasksHandler());
         server.setExecutor(null);
         server.start();
+    }
+
+    public void stopServer() {
+        if (server != null) {
+            server.stop(0);
+        }
     }
 
     private class TasksHandler implements HttpHandler {
@@ -56,7 +63,7 @@ public class WorkerEndpoint {
                     new BufferedReader(new InputStreamReader(exchange.getRequestBody()))) {
                 NewTaskDetails taskRequest = gson.fromJson(reader, NewTaskDetails.class);
                 TaskDetails taskDetails = taskCreator.apply(taskRequest);
-                sendResponse(exchange, 201, gson.toJson(taskDetails));
+                sendResponse(exchange, 200, gson.toJson(taskDetails));
             } catch (Exception e) {
                 sendResponse(exchange, 400, "Failed to create task: " + e.getMessage());
             }
@@ -86,7 +93,7 @@ public class WorkerEndpoint {
 
         private void handleGetTaskById(HttpExchange exchange, String taskId) throws IOException {
             try {
-                TaskDetails taskDetails = taskDetailsRetriever.apply(taskId);
+                TaskDetails taskDetails = taskDetailsRetriever.apply(Integer.parseInt(taskId));
                 if (taskDetails != null) {
                     sendResponse(exchange, 200, gson.toJson(taskDetails));
                 } else {
