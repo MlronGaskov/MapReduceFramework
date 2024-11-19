@@ -71,7 +71,6 @@ public class SlowWordCounterProgram {
                         throw new RuntimeException();
                     }
                 }
-                System.out.println(split.key());
             }
         }
     }
@@ -89,7 +88,6 @@ public class SlowWordCounterProgram {
                     throw new RuntimeException();
                 }
             }
-            System.out.println(sum);
             output.put(key, sum);
         }
     }
