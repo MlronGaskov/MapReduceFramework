@@ -54,7 +54,6 @@ public class WorkerEndpoint {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String requestMethod = exchange.getRequestMethod();
-
             switch (requestMethod.toUpperCase()) {
                 case "PUT":
                     handleCreateTask(exchange);
