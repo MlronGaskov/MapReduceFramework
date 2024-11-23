@@ -28,6 +28,8 @@ public class MapReduceTasksRunner {
             throws IOException {
         List<FileSystemSink<K_I, V_I>> sortedFileSinks = new ArrayList<>();
         for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); ++i) {
+            Files.deleteIfExists(
+                    mappersOutputDirectory.resolve("mapper-output-" + mapperId + "-" + i + ".txt"));
             sortedFileSinks.add(
                     new SortedFileSink<>(
                             job.getSerializerInterKey(),
@@ -99,7 +101,7 @@ public class MapReduceTasksRunner {
                             job.getDeserializerInterKey(),
                             job.getDeserializerInterValue()));
         }
-
+        Files.deleteIfExists(outputDirectory.resolve("output-" + reducerId + ".txt"));
         try (FileSink<K_O, V_O> fileSink =
                         new FileSink<>(
                                 job.getSerializerOutKey(),

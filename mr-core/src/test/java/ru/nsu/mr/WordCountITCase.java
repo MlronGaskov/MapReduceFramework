@@ -3,8 +3,7 @@ package ru.nsu.mr;
 import static org.junit.jupiter.api.Assertions.*;
 
 import static ru.nsu.mr.PredefinedFunctions.*;
-import static ru.nsu.mr.config.ConfigurationOption.MAPPERS_COUNT;
-import static ru.nsu.mr.config.ConfigurationOption.REDUCERS_COUNT;
+import static ru.nsu.mr.config.ConfigurationOption.*;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +21,7 @@ import java.util.stream.Stream;
 class WordCountITCase {
     private Path reducersOutputPath;
     private Path mappersOutputPath;
+    private List<Path> inputFiles;
 
     @BeforeEach
     public void setUp() throws IOException {
@@ -33,12 +33,20 @@ class WordCountITCase {
     public void tearDown() throws IOException {
         deleteDirectory(reducersOutputPath);
         deleteDirectory(mappersOutputPath);
+        for (Path file : inputFiles) {
+            Files.deleteIfExists(file);
+        }
     }
 
     static class WordCountMapper implements Mapper<String, String, String, Integer> {
         @Override
         public void map(
                 Iterator<Pair<String, String>> input, OutputContext<String, Integer> output) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ignore) {
+
+            }
             while (input.hasNext()) {
                 Pair<String, String> split = input.next();
                 for (String word : split.value().split("[\\s.,]+")) {
@@ -52,6 +60,11 @@ class WordCountITCase {
         @Override
         public void reduce(
                 String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ignore) {
+
+            }
             int sum = 0;
             while (values.hasNext()) {
                 sum += values.next();
@@ -61,15 +74,15 @@ class WordCountITCase {
     }
 
     @ParameterizedTest
-    @MethodSource("wordCounterParameters")
-    public void testWordCounter(WordCounterConfig testConfig) throws IOException {
+    @MethodSource("testParameters")
+    public void testWordCounter(TestParameters params) throws IOException {
+        WordCounterConfig testConfig = params.config;
         int inputFilesCount = testConfig.inputFilesCount;
         int eachWordPerFileCount = testConfig.eachWordPerFileCount;
         int mappersCount = testConfig.mappersCount;
         int reducersCount = testConfig.reducersCount;
 
-        List<Path> inputFiles =
-                generatesInputFiles(inputFilesCount, testConfig.WORDS, eachWordPerFileCount);
+        inputFiles = generatesInputFiles(inputFilesCount, testConfig.WORDS, eachWordPerFileCount);
 
         MapReduceJob<String, Integer, String, Integer> job =
                 new MapReduceJob<>(
@@ -87,11 +100,13 @@ class WordCountITCase {
         Configuration config =
                 new Configuration()
                         .set(MAPPERS_COUNT, mappersCount)
-                        .set(REDUCERS_COUNT, reducersCount);
+                        .set(REDUCERS_COUNT, reducersCount)
+                        .set(METRICS_PORT, "8000")
+                        .set(WORKERS_COUNT, params.config.workersCount);
 
-        MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
+        MapReduceRunner<String, Integer, String, Integer> runner = params.runner;
 
-        mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
+        runner.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
         HashMap<String, Integer> mappersResult = new HashMap<>();
         for (int i = 0; i < mappersCount; ++i) {
@@ -132,15 +147,20 @@ class WordCountITCase {
         int eachWordPerFileCount;
         int inputFilesCount;
         int mappersCount;
-
         int reducersCount;
+        int workersCount;
 
         WordCounterConfig(
-                int eachWordCount, int inputFilesCount, int mappersCount, int reducersCount) {
+                int eachWordCount,
+                int inputFilesCount,
+                int mappersCount,
+                int reducersCount,
+                int workersCount) {
             this.eachWordPerFileCount = eachWordCount;
             this.inputFilesCount = inputFilesCount;
             this.mappersCount = mappersCount;
             this.reducersCount = reducersCount;
+            this.workersCount = workersCount;
         }
 
         @Override
@@ -156,8 +176,33 @@ class WordCountITCase {
         }
     }
 
-    static Stream<WordCounterConfig> wordCounterParameters() {
-        return Stream.of(new WordCounterConfig(10, 10, 3, 4), new WordCounterConfig(5, 50, 2, 3));
+    public static class TestParameters {
+        WordCounterConfig config;
+        MapReduceRunner<String, Integer, String, Integer> runner;
+
+        public TestParameters(
+                WordCounterConfig config,
+                MapReduceRunner<String, Integer, String, Integer> runner) {
+            this.config = config;
+            this.runner = runner;
+        }
+
+        @Override
+        public String toString() {
+            return config + " using " + runner.getClass().getSimpleName();
+        }
+    }
+
+    static Stream<TestParameters> testParameters() {
+        return Stream.of(
+                new TestParameters(
+                        new WordCounterConfig(10, 10, 3, 4, 1), new MapReduceSequentialRunner<>()),
+                new TestParameters(
+                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner<>()),
+                new TestParameters(new WordCounterConfig(10, 10, 3, 4, 2), new ParallelRunner<>()),
+                new TestParameters(new WordCounterConfig(5, 50, 2, 3, 3), new ParallelRunner<>()),
+                new TestParameters(
+                        new WordCounterConfig(5, 250, 30, 30, 10), new ParallelRunner<>()));
     }
 
     private void deleteDirectory(Path path) throws IOException {
