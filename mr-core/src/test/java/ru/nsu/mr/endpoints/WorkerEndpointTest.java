@@ -53,7 +53,7 @@ class WorkerEndpointTest {
         Supplier<List<TaskInfo>> allTasksSupplier = () -> new ArrayList<>(allTasksList);
 
         workerEndpoint = new WorkerEndpoint(taskCreator, taskDetailsRetriever, allTasksSupplier);
-        workerEndpoint.startServer(8080);
+        workerEndpoint.startServer("8080");
     }
 
     @AfterEach

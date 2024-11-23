@@ -22,115 +22,59 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public class CoordinatorEndpointTest {
+
     private static final Gson gson = new Gson();
     private static CoordinatorEndpoint endpoint;
 
     @BeforeAll
     public static void setup() throws IOException {
-        endpoint =
-                new CoordinatorEndpoint(
-                        "8080",
-                        new MetricsService() {
-                            @Override
-                            public List<JobSummary> getJobs() {
-                                return List.of(
-                                        new JobSummary(
-                                                "1",
-                                                LocalDateTime.of(2024, 1, 1, 1, 1).toString(),
-                                                JobState.QUEUED),
-                                        new JobSummary(
-                                                "2",
-                                                LocalDateTime.of(2024, 1, 1, 2, 1).toString(),
-                                                JobState.RUNNING),
-                                        new JobSummary(
-                                                "3",
-                                                LocalDateTime.of(2024, 1, 1, 3, 1).toString(),
-                                                JobState.FAILED),
-                                        new JobSummary(
-                                                "4",
-                                                LocalDateTime.of(2024, 1, 2, 1, 1).toString(),
-                                                JobState.COMPLETED));
-                            }
-
-                            @Override
-                            public JobDetails getJobDetails(String dateTime) {
-                                return switch (dateTime) {
-                                    case "1" ->
-                                            new JobDetails("1", dateTime, JobState.QUEUED, 0, 0);
-                                    case "2" ->
-                                            new JobDetails("2", dateTime, JobState.RUNNING, 4, 2);
-                                    case "3" ->
-                                            new JobDetails("3", dateTime, JobState.FAILED, 3, 1);
-                                    case "4" ->
-                                            new JobDetails(
-                                                    "4", dateTime, JobState.COMPLETED, 10, 10);
-                                    default -> throw new IllegalArgumentException();
-                                };
-                            }
-                        });
-        endpoint.start();
+        endpoint = new CoordinatorEndpoint(
+                "8080",
+                new MockMetricsService(),
+                workerPort -> {},
+                taskDetails -> {}
+        );
+        endpoint.startServer();
     }
 
     @AfterAll
     public static void tearDown() {
-        endpoint.stop();
+        endpoint.stopServer();
     }
 
     @Test
-    public void testJobsGet() throws IOException, URISyntaxException {
+    public void testGetJobs() throws IOException, URISyntaxException {
         URI uri = new URI("http://localhost:8080/jobs");
         HttpURLConnection connection = openConnection(uri);
 
-        String response = getResponseContent(connection);
-        assertEquals(200, connection.getResponseCode(), "Expected HTTP 200 for /jobs");
+        assertEquals(200, connection.getResponseCode(), "Expected HTTP 200 for GET /jobs");
 
-        List<JobSummary> expectedJobSummaries =
-                List.of(
-                        new JobSummary(
-                                "1",
-                                LocalDateTime.of(2024, 1, 1, 1, 1).toString(),
-                                JobState.QUEUED),
-                        new JobSummary(
-                                "2",
-                                LocalDateTime.of(2024, 1, 1, 2, 1).toString(),
-                                JobState.RUNNING),
-                        new JobSummary(
-                                "3",
-                                LocalDateTime.of(2024, 1, 1, 3, 1).toString(),
-                                JobState.FAILED),
-                        new JobSummary(
-                                "4",
-                                LocalDateTime.of(2024, 1, 2, 1, 1).toString(),
-                                JobState.COMPLETED));
+        String response = getResponseContent(connection);
+        List<JobSummary> expectedJobSummaries = MockMetricsService.EXPECTED_JOB_SUMMARIES;
 
         assertEquals(
                 gson.toJson(expectedJobSummaries),
                 response,
-                "Job list did not match expected response");
+                "The job summaries returned by the endpoint do not match the expected values."
+        );
     }
 
     @Test
-    public void testJobGet() throws IOException, URISyntaxException {
-        List<JobDetails> testCases =
-                List.of(
-                        new JobDetails("1", "1", JobState.QUEUED, 0, 0),
-                        new JobDetails("2", "2", JobState.RUNNING, 4, 2),
-                        new JobDetails("3", "3", JobState.FAILED, 3, 1),
-                        new JobDetails("4", "4", JobState.COMPLETED, 10, 10));
-
-        for (JobDetails expectedJobDetails : testCases) {
-            URI uri = new URI("http://localhost:8080/jobs/" + expectedJobDetails.jobId());
+    public void testGetJobDetails() throws IOException, URISyntaxException {
+        for (JobDetails expectedDetails : MockMetricsService.EXPECTED_JOB_DETAILS) {
+            URI uri = new URI("http://localhost:8080/jobs/" + expectedDetails.jobId());
             HttpURLConnection connection = openConnection(uri);
-            assertEquals(
-                    200,
-                    connection.getResponseCode(),
-                    "Expected HTTP 200 for date: " + expectedJobDetails.jobId());
+
+            assertEquals(200, connection.getResponseCode(),
+                    "Expected HTTP 200 for GET /jobs/" + expectedDetails.jobId());
 
             String response = getResponseContent(connection);
+
             assertEquals(
-                    gson.toJson(expectedJobDetails),
+                    gson.toJson(expectedDetails),
                     response,
-                    "Response did not match for date: " + expectedJobDetails.jobId());
+                    "The job details returned by the endpoint do not match the expected values for job ID: "
+                            + expectedDetails.jobId());
         }
     }
 
@@ -143,13 +87,41 @@ public class CoordinatorEndpointTest {
 
     private String getResponseContent(HttpURLConnection connection) throws IOException {
         StringBuilder response = new StringBuilder();
-        try (BufferedReader in =
-                new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
                 response.append(inputLine);
             }
         }
         return response.toString();
+    }
+
+    private static class MockMetricsService implements MetricsService {
+        static final List<JobSummary> EXPECTED_JOB_SUMMARIES = List.of(
+                new JobSummary("1", LocalDateTime.of(2024, 1, 1, 1, 1).toString(), JobState.QUEUED),
+                new JobSummary("2", LocalDateTime.of(2024, 1, 1, 2, 1).toString(), JobState.RUNNING),
+                new JobSummary("3", LocalDateTime.of(2024, 1, 1, 3, 1).toString(), JobState.FAILED),
+                new JobSummary("4", LocalDateTime.of(2024, 1, 2, 1, 1).toString(), JobState.COMPLETED)
+        );
+
+        static final List<JobDetails> EXPECTED_JOB_DETAILS = List.of(
+                new JobDetails("1", "1", JobState.QUEUED, 0, 0),
+                new JobDetails("2", "2", JobState.RUNNING, 4, 2),
+                new JobDetails("3", "3", JobState.FAILED, 3, 1),
+                new JobDetails("4", "4", JobState.COMPLETED, 10, 10)
+        );
+
+        @Override
+        public List<JobSummary> getJobs() {
+            return EXPECTED_JOB_SUMMARIES;
+        }
+
+        @Override
+        public JobDetails getJobDetails(String jobId) {
+            return EXPECTED_JOB_DETAILS.stream()
+                    .filter(details -> details.jobId().equals(jobId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Job not found for ID: " + jobId));
+        }
     }
 }

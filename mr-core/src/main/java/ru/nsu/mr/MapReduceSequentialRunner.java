@@ -12,9 +12,6 @@ import java.util.*;
 
 public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT>
         implements MapReduceRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
-    private Path mappersOutputPath;
-    private Logger logger;
-    private String jobId;
 
     public MapReduceSequentialRunner() {}
 
@@ -25,8 +22,7 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
             Configuration configuration,
             Path mappersOutputDirectory,
             Path outputDirectory) {
-        this.mappersOutputPath = mappersOutputDirectory;
-        this.logger = new LoggerWithMetricsCalculation();
+        Logger logger = new LoggerWithMetricsCalculation();
         CoordinatorEndpoint endpoint = null;
 
         if (!configuration.get(ConfigurationOption.METRICS_PORT).isEmpty()) {
@@ -34,14 +30,16 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
                 endpoint =
                         new CoordinatorEndpoint(
                                 configuration.get(ConfigurationOption.METRICS_PORT),
-                                (MetricsService) this.logger);
-                endpoint.start();
+                                (MetricsService) logger,
+                                (e) -> {},
+                                (e) -> {});
+                endpoint.startServer();
             } catch (IOException e) {
                 throw new RuntimeException();
             }
         }
 
-        jobId = "1";
+        String jobId = "1";
 
         logger.jobReceived(jobId, jobId);
         logger.jobStart(jobId);
@@ -69,7 +67,7 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
             List<Path> interFilesToReduce = new ArrayList<>();
             for (int k = 0; k < mappersCount; ++k) {
                 interFilesToReduce.add(
-                        mappersOutputPath.resolve("mapper-output-" + k + "-" + i + ".txt"));
+                        mappersOutputDirectory.resolve("mapper-output-" + k + "-" + i + ".txt"));
             }
             try {
                 MapReduceTasksRunner.executeReduceTask(
@@ -82,7 +80,7 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
         logger.jobFinish(jobId);
 
         if (endpoint != null) {
-            endpoint.stop();
+            endpoint.stopServer();
         }
     }
 }
