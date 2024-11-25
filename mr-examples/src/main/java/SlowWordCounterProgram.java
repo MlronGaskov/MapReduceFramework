@@ -46,7 +46,7 @@ public class SlowWordCounterProgram {
                         .set(REDUCERS_COUNT, reducersCount)
                         .set(METRICS_PORT, "8080");
 
-        MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
+        MapReduceRunner mr = new MapReduceSequentialRunner();
 
         mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 

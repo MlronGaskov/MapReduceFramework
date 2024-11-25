@@ -1,6 +1,5 @@
 package ru.nsu.mr;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static ru.nsu.mr.PredefinedFunctions.*;
 import static ru.nsu.mr.config.ConfigurationOption.MAPPERS_COUNT;
 import static ru.nsu.mr.config.ConfigurationOption.REDUCERS_COUNT;
@@ -58,7 +57,8 @@ class InvertedIndexITCase {
             while (values.hasNext()) {
                 documentIds.add(values.next());
             }
-            output.put(key, new ArrayList<>(documentIds)); // Emit (word, sorted list of document IDs)
+            output.put(
+                    key, new ArrayList<>(documentIds)); // Emit (word, sorted list of document IDs)
         }
     }
 
@@ -87,7 +87,7 @@ class InvertedIndexITCase {
                         .set(REDUCERS_COUNT, testConfig.reducersCount);
 
         // Измененный тип параметров
-        MapReduceRunner<String, String, String, List<String>> mr = new MapReduceSequentialRunner<>();
+        MapReduceRunner mr = new MapReduceSequentialRunner();
 
         mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
@@ -99,13 +99,16 @@ class InvertedIndexITCase {
         // Validate the output
         for (String word : testConfig.DOCUMENTS) {
             String[] expectedDocumentIdsArray = testConfig.expectedDocumentIds.get(word);
-            List<String> expectedDocIds = expectedDocumentIdsArray != null ? Arrays.asList(expectedDocumentIdsArray) : null; // Проверка на null
+            List<String> expectedDocIds =
+                    expectedDocumentIdsArray != null
+                            ? Arrays.asList(expectedDocumentIdsArray)
+                            : null; // Проверка на null
             List<String> actualDocIds = reducesResult.get(word);
         }
     }
 
-
-    public static void readResult(String filename, Map<String, List<String>> result) throws IOException {
+    public static void readResult(String filename, Map<String, List<String>> result)
+            throws IOException {
         try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -115,7 +118,12 @@ class InvertedIndexITCase {
                     List<String> docIds = Arrays.asList(parts[1].split(","));
                     result.put(word, docIds);
                 } else {
-                    System.err.println("Warning: No document IDs found for word '" + word + "' in file '" + filename + "'");
+                    System.err.println(
+                            "Warning: No document IDs found for word '"
+                                    + word
+                                    + "' in file '"
+                                    + filename
+                                    + "'");
                 }
             }
         }
@@ -123,19 +131,22 @@ class InvertedIndexITCase {
 
     public static class InvertedIndexConfig {
         final String[] DOCUMENTS = {
-                "doc1: apple banana orange",
-                "doc2: banana kiwi",
-                "doc3: apple banana",
-                "doc4: orange grape",
+            "doc1: apple banana orange",
+            "doc2: banana kiwi",
+            "doc3: apple banana",
+            "doc4: orange grape",
         };
 
-        final Map<String, String[]> expectedDocumentIds = new HashMap<>() {{
-            put("apple", new String[]{"doc1", "doc3"});
-            put("banana", new String[]{"doc1", "doc2", "doc3"});
-            put("orange", new String[]{"doc1", "doc4"});
-            put("kiwi", new String[]{"doc2"});
-            put("grape", new String[]{"doc4"});
-        }};
+        final Map<String, String[]> expectedDocumentIds =
+                new HashMap<>() {
+                    {
+                        put("apple", new String[] {"doc1", "doc3"});
+                        put("banana", new String[] {"doc1", "doc2", "doc3"});
+                        put("orange", new String[] {"doc1", "doc4"});
+                        put("kiwi", new String[] {"doc2"});
+                        put("grape", new String[] {"doc4"});
+                    }
+                };
 
         final int inputFilesCount = DOCUMENTS.length;
         final int mappersCount = 2; // Количество мапперов
@@ -156,7 +167,8 @@ class InvertedIndexITCase {
         return Stream.of(new InvertedIndexConfig());
     }
 
-    private static List<Path> generatesInputFiles(int inputFilesCount, String[] documents) throws IOException {
+    private static List<Path> generatesInputFiles(int inputFilesCount, String[] documents)
+            throws IOException {
         List<Path> inputFiles = new ArrayList<>();
         for (int i = 0; i < inputFilesCount; i++) {
             Path tempFile = Files.createTempFile("input-", ".txt");

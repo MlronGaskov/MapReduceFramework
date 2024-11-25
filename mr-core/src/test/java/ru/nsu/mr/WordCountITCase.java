@@ -104,7 +104,7 @@ class WordCountITCase {
                         .set(METRICS_PORT, "8000")
                         .set(WORKERS_COUNT, params.config.workersCount);
 
-        MapReduceRunner<String, Integer, String, Integer> runner = params.runner;
+        MapReduceRunner runner = params.runner;
 
         runner.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
@@ -178,11 +178,9 @@ class WordCountITCase {
 
     public static class TestParameters {
         WordCounterConfig config;
-        MapReduceRunner<String, Integer, String, Integer> runner;
+        MapReduceRunner runner;
 
-        public TestParameters(
-                WordCounterConfig config,
-                MapReduceRunner<String, Integer, String, Integer> runner) {
+        public TestParameters(WordCounterConfig config, MapReduceRunner runner) {
             this.config = config;
             this.runner = runner;
         }
@@ -196,13 +194,13 @@ class WordCountITCase {
     static Stream<TestParameters> testParameters() {
         return Stream.of(
                 new TestParameters(
-                        new WordCounterConfig(10, 10, 3, 4, 1), new MapReduceSequentialRunner<>()),
+                        new WordCounterConfig(10, 10, 3, 4, 1), new MapReduceSequentialRunner()),
                 new TestParameters(
-                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner<>()),
-                new TestParameters(new WordCounterConfig(10, 10, 3, 4, 2), new ParallelRunner<>()),
-                new TestParameters(new WordCounterConfig(5, 50, 2, 3, 3), new ParallelRunner<>()),
+                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner()),
+                new TestParameters(new WordCounterConfig(10, 10, 3, 4, 2), new ParallelRunner()),
+                new TestParameters(new WordCounterConfig(5, 50, 2, 3, 3), new ParallelRunner()),
                 new TestParameters(
-                        new WordCounterConfig(5, 250, 30, 30, 10), new ParallelRunner<>()));
+                        new WordCounterConfig(5, 250, 30, 30, 10), new ParallelRunner()));
     }
 
     private void deleteDirectory(Path path) throws IOException {
