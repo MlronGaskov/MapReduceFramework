@@ -30,8 +30,8 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
                         new CoordinatorEndpoint(
                                 configuration.get(ConfigurationOption.METRICS_PORT),
                                 (MetricsService) logger,
-                                (_) -> {},
-                                (_) -> {});
+                                (e) -> {},
+                                (e) -> {});
                 endpoint.startServer();
             } catch (IOException e) {
                 throw new RuntimeException();
