@@ -1,6 +1,5 @@
 package ru.nsu.mr;
 
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,10 +38,10 @@ public class WebLinkGraphITCase {
         deleteDirectory(mappersOutputPath);
     }
 
-
     static class ReverseWebLinkMapper implements Mapper<String, String, String, String> {
         @Override
-        public void map(Iterator<Pair<String, String>> input, OutputContext<String, String> output) {
+        public void map(
+                Iterator<Pair<String, String>> input, OutputContext<String, String> output) {
             while (input.hasNext()) {
                 Pair<String, String> fileAndLinks = input.next();
                 String[] links = fileAndLinks.value().split("\\s+");
@@ -53,64 +52,81 @@ public class WebLinkGraphITCase {
 
     static class ReverseWebLinkReducer implements Reducer<String, String, String, List<String>> {
         @Override
-        public void reduce(String key, Iterator<String> values, OutputContext<String, List<String>> output) {
+        public void reduce(
+                String key, Iterator<String> values, OutputContext<String, List<String>> output) {
             List<String> sources = new ArrayList<>();
             while (values.hasNext()) {
                 String value = values.next();
-                if(!sources.contains(value)){
+                if (!sources.contains(value)) {
                     sources.add(value);
                 }
             }
             output.put(key, sources);
         }
     }
+
     @ParameterizedTest
-    @MethodSource ("webLinkGraphParameters")
+    @MethodSource("webLinkGraphParameters")
     public void testReverseWebLinkGraph(WebLinkGraphSettings testSettings) throws IOException {
         Path inputFilesPath = Path.of(testSettings.inputFilesPath);
         Path mapperAnswersPath = Path.of(testSettings.mapperAnswersPath);
         Path outputAnswersPath = Path.of(testSettings.outputAnswersPath);
 
+        List<Path> inputFiles =
+                Files.list(inputFilesPath).sorted(Comparator.comparing(Path::getFileName)).toList();
 
-        List<Path> inputFiles = Files.list(inputFilesPath).sorted(Comparator.comparing(Path::getFileName)).toList();
+        MapReduceJob<String, String, String, List<String>> job =
+                new MapReduceJob<>(
+                        new ReverseWebLinkMapper(),
+                        new ReverseWebLinkReducer(),
+                        x -> x,
+                        x -> x,
+                        x -> x,
+                        x -> x,
+                        x -> x,
+                        Object::toString,
+                        String::compareTo,
+                        String::hashCode);
 
-        MapReduceJob<String, String, String, List<String>> job = new MapReduceJob<>(
-                new ReverseWebLinkMapper(),
-                new ReverseWebLinkReducer(),
-                x -> x,
-                x -> x,
-                x -> x,
-                x -> x,
-                x -> x,
-                Object::toString,
-                String::compareTo,
-                String::hashCode
+        Configuration config =
+                new Configuration()
+                        .set(MAPPERS_COUNT, testSettings.mappersCount)
+                        .set(REDUCERS_COUNT, testSettings.reducersCount);
 
-        );
-
-        Configuration config = new Configuration()
-                .set(MAPPERS_COUNT, testSettings.mappersCount)
-                .set(REDUCERS_COUNT, testSettings.reducersCount);
-
-        MapReduceRunner<String, String, String, List<String>> mr = new MapReduceSequentialRunner<>();
+        MapReduceRunner mr = new MapReduceSequentialRunner();
         mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
-        List<Path> mapperFiles = List.of(Files.list(mappersOutputPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
-        List<Path> mapperAnswerFiles = List.of(Files.list(mapperAnswersPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
+        List<Path> mapperFiles =
+                List.of(
+                        Files.list(mappersOutputPath)
+                                .sorted(Comparator.comparing(Path::getFileName))
+                                .toArray(Path[]::new));
+        List<Path> mapperAnswerFiles =
+                List.of(
+                        Files.list(mapperAnswersPath)
+                                .sorted(Comparator.comparing(Path::getFileName))
+                                .toArray(Path[]::new));
         assertEquals(mapperFiles.size(), mapperAnswerFiles.size());
 
-        for (int i= 0; i<mapperFiles.size(); i++) {
+        for (int i = 0; i < mapperFiles.size(); i++) {
             compareFileContents(mapperFiles.get(i), mapperAnswerFiles.get(i));
         }
 
-        List<Path> reducerFiles = List.of(Files.list(reducersOutputPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
-        List<Path> outputAnswerFiles = List.of(Files.list(outputAnswersPath).sorted(Comparator.comparing(Path::getFileName)).toArray(Path[]::new));
+        List<Path> reducerFiles =
+                List.of(
+                        Files.list(reducersOutputPath)
+                                .sorted(Comparator.comparing(Path::getFileName))
+                                .toArray(Path[]::new));
+        List<Path> outputAnswerFiles =
+                List.of(
+                        Files.list(outputAnswersPath)
+                                .sorted(Comparator.comparing(Path::getFileName))
+                                .toArray(Path[]::new));
         assertEquals(reducerFiles.size(), outputAnswerFiles.size());
 
-        for (int i= 0; i<reducerFiles.size(); i++) {
+        for (int i = 0; i < reducerFiles.size(); i++) {
             compareFileContents(reducerFiles.get(i), outputAnswerFiles.get(i));
         }
-
     }
 
     public static class WebLinkGraphSettings {
@@ -120,28 +136,34 @@ public class WebLinkGraphITCase {
         String mapperAnswersPath;
         String outputAnswersPath;
 
-        WebLinkGraphSettings(int mappersCount, int reducersCount, String inputFilesPath, String mapperAnswersPath,
-                             String outputAnswersPath) throws IOException {
+        WebLinkGraphSettings(
+                int mappersCount,
+                int reducersCount,
+                String inputFilesPath,
+                String mapperAnswersPath,
+                String outputAnswersPath)
+                throws IOException {
             this.mappersCount = mappersCount;
             this.reducersCount = reducersCount;
             this.inputFilesPath = inputFilesPath;
             this.mapperAnswersPath = mapperAnswersPath;
             this.outputAnswersPath = outputAnswersPath;
-
         }
     }
 
     static Stream<WebLinkGraphSettings> webLinkGraphParameters() throws IOException {
         return Stream.of(
-                new WebLinkGraphSettings(3, 3,"src/test/resources/WebLinkGraphITCase/InputFiles",
+                new WebLinkGraphSettings(
+                        3,
+                        3,
+                        "src/test/resources/WebLinkGraphITCase/InputFiles",
                         "src/test/resources/WebLinkGraphITCase/AnswerFiles/Mapper",
-                        "src/test/resources/WebLinkGraphITCase/AnswerFiles/Output")
-        );
+                        "src/test/resources/WebLinkGraphITCase/AnswerFiles/Output"));
     }
 
     private void compareFileContents(Path file1, Path file2) throws IOException {
         try (BufferedReader reader1 = Files.newBufferedReader(file1);
-             BufferedReader reader2 = Files.newBufferedReader(file2)) {
+                BufferedReader reader2 = Files.newBufferedReader(file2)) {
 
             String line1 = reader1.readLine();
             String line2 = reader2.readLine();

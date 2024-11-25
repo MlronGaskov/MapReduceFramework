@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
-public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
+public class Worker {
 
     private static final class Task {
         public enum TaskStatus {
@@ -63,7 +63,7 @@ public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
         }
     }
 
-    private final MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job;
+    private final MapReduceJob<?, ?, ?, ?> job;
     private final Configuration configuration;
     private final Path outputDirectory;
     private final Path mappersOutputPath;
@@ -72,10 +72,10 @@ public class Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
 
     private volatile Task currentTask = null;
     private final Map<Integer, Task> previousTasks = new HashMap<>();
-    private WorkerEndpoint workerEndpoint;
+    private final WorkerEndpoint workerEndpoint;
 
     public Worker(
-            MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job,
+            MapReduceJob<?, ?, ?, ?> job,
             Configuration configuration,
             Path mappersOutputDirectory,
             Path outputDirectory,

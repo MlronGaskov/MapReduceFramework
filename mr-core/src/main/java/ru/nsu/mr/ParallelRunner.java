@@ -8,14 +8,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ParallelRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT>
-        implements MapReduceRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
+public class ParallelRunner implements MapReduceRunner {
 
     public ParallelRunner() {}
 
     @Override
     public void run(
-            MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job,
+            MapReduceJob<?, ?, ?, ?> job,
             List<Path> inputFiles,
             Configuration configuration,
             Path mappersOutputDirectory,
@@ -43,8 +42,8 @@ public class ParallelRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT>
                     new Thread(
                             () -> {
                                 try {
-                                    Worker<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> worker =
-                                            new Worker<>(
+                                    Worker worker =
+                                            new Worker(
                                                     job,
                                                     configuration,
                                                     mappersOutputDirectory,

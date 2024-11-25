@@ -5,9 +5,9 @@ import ru.nsu.mr.config.Configuration;
 import java.nio.file.Path;
 import java.util.List;
 
-public interface MapReduceRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
+public interface MapReduceRunner {
     void run(
-            MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job,
+            MapReduceJob<?, ?, ?, ?> job,
             List<Path> inputFiles,
             Configuration configuration,
             Path mappersOutputDirectory,

@@ -10,14 +10,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
-public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT>
-        implements MapReduceRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> {
+public class MapReduceSequentialRunner implements MapReduceRunner {
 
     public MapReduceSequentialRunner() {}
 
     @Override
     public void run(
-            MapReduceJob<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OUT> job,
+            MapReduceJob<?, ?, ?, ?> job,
             List<Path> inputFiles,
             Configuration configuration,
             Path mappersOutputDirectory,
@@ -31,8 +30,8 @@ public class MapReduceSequentialRunner<KEY_INTER, VALUE_INTER, KEY_OUT, VALUE_OU
                         new CoordinatorEndpoint(
                                 configuration.get(ConfigurationOption.METRICS_PORT),
                                 (MetricsService) logger,
-                                (e) -> {},
-                                (e) -> {});
+                                (_) -> {},
+                                (_) -> {});
                 endpoint.startServer();
             } catch (IOException e) {
                 throw new RuntimeException();

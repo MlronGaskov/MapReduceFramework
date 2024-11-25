@@ -36,7 +36,8 @@ class DistributedSortITCase {
 
     static class DistributedSortMapper implements Mapper<String, String, String, Integer> {
         @Override
-        public void map(Iterator<Pair<String, String>> input, OutputContext<String, Integer> output) {
+        public void map(
+                Iterator<Pair<String, String>> input, OutputContext<String, Integer> output) {
             while (input.hasNext()) {
                 Pair<String, String> record = input.next();
                 String key = extractKey(record.value());
@@ -57,7 +58,8 @@ class DistributedSortITCase {
 
     static class DistributedSortReducer implements Reducer<String, Integer, String, Integer> {
         @Override
-        public void reduce(String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
+        public void reduce(
+                String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
             while (values.hasNext()) {
                 output.put(key, values.next());
             }
@@ -74,24 +76,25 @@ class DistributedSortITCase {
 
         List<Path> inputFiles = generateInputFiles(fileCount, recordsPerFile);
 
-        MapReduceJob<String, Integer, String, Integer> job = new MapReduceJob<>(
-                new DistributedSortMapper(),
-                new DistributedSortReducer(),
-                STRING_SERIALIZER,
-                INTEGER_SERIALIZER,
-                STRING_DESERIALIZER,
-                INTEGER_DESERIALIZER,
-                STRING_SERIALIZER,
-                INTEGER_SERIALIZER,
-                STRING_KEY_COMPARATOR,
-                STRING_KEY_HASH
-        );
+        MapReduceJob<String, Integer, String, Integer> job =
+                new MapReduceJob<>(
+                        new DistributedSortMapper(),
+                        new DistributedSortReducer(),
+                        STRING_SERIALIZER,
+                        INTEGER_SERIALIZER,
+                        STRING_DESERIALIZER,
+                        INTEGER_DESERIALIZER,
+                        STRING_SERIALIZER,
+                        INTEGER_SERIALIZER,
+                        STRING_KEY_COMPARATOR,
+                        STRING_KEY_HASH);
 
-        Configuration config = new Configuration()
-                .set(MAPPERS_COUNT, mappersCount)
-                .set(REDUCERS_COUNT, reducersCount);
+        Configuration config =
+                new Configuration()
+                        .set(MAPPERS_COUNT, mappersCount)
+                        .set(REDUCERS_COUNT, reducersCount);
 
-        MapReduceRunner<String, Integer, String, Integer> mr = new MapReduceSequentialRunner<>();
+        MapReduceRunner mr = new MapReduceSequentialRunner();
 
         mr.run(job, inputFiles, config, mappersOutputPath, reducersOutputPath);
 
@@ -108,7 +111,6 @@ class DistributedSortITCase {
         List<String> keys = new ArrayList<>(sortedResults);
         Collections.sort(keys);
         assertEquals(keys, sortedResults);
-
     }
 
     public static class SortConfig {
@@ -126,23 +128,24 @@ class DistributedSortITCase {
 
         @Override
         public String toString() {
-            return "M = " + mappersCount + ", R = " + reducersCount + ", files = " +
-                    fileCount + ", record per file = " + recordsPerFile;
+            return "M = "
+                    + mappersCount
+                    + ", R = "
+                    + reducersCount
+                    + ", files = "
+                    + fileCount
+                    + ", record per file = "
+                    + recordsPerFile;
         }
     }
 
     static Stream<SortConfig> sortParameters() {
-        return Stream.of(
-                new SortConfig(5, 10, 1, 2),
-                new SortConfig(10, 4, 1, 5)
-        );
+        return Stream.of(new SortConfig(5, 10, 1, 2), new SortConfig(10, 4, 1, 5));
     }
 
     private void deleteDirectory(Path path) throws IOException {
         try (Stream<Path> pathStream = Files.walk(path)) {
-            pathStream.sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+            pathStream.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
         }
     }
 
@@ -152,7 +155,11 @@ class DistributedSortITCase {
             Path tempFile = Files.createTempFile("InputFile" + i, ".txt");
             try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
                 for (int j = 0; j < recordsPerFile; j++) {
-                    writer.write("key:" + (ThreadLocalRandom.current().nextInt(0, recordsPerFile)) + " " + j);
+                    writer.write(
+                            "key:"
+                                    + (ThreadLocalRandom.current().nextInt(0, recordsPerFile))
+                                    + " "
+                                    + j);
                     writer.newLine();
                 }
             }
