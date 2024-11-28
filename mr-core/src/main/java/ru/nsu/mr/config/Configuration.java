@@ -11,10 +11,6 @@ public class Configuration {
         return this;
     }
 
-    public <T> boolean isSet(ConfigurationOption<T> option) {
-        return values.containsKey(option.name);
-    }
-
     @SuppressWarnings("unchecked")
     public <T> T get(ConfigurationOption<T> option) {
         if (values.containsKey(option.name)) {

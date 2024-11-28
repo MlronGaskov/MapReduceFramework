@@ -1,4 +1,4 @@
-package ru.nsu.mr.manager;
+package ru.nsu.mr.gateway;
 
 import com.google.gson.Gson;
 

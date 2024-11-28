@@ -4,7 +4,7 @@ import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.WorkerEndpoint;
 import ru.nsu.mr.endpoints.dto.*;
-import ru.nsu.mr.manager.CoordinatorManager;
+import ru.nsu.mr.gateway.CoordinatorGateway;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -67,7 +67,7 @@ public class Worker {
     private final Configuration configuration;
     private final Path outputDirectory;
     private final Path mappersOutputPath;
-    private final CoordinatorManager coordinatorManager;
+    private final CoordinatorGateway coordinatorGateway;
     private final String serverPort;
 
     private volatile Task currentTask = null;
@@ -89,7 +89,7 @@ public class Worker {
         this.mappersOutputPath = mappersOutputDirectory;
         this.serverPort = serverPort;
 
-        this.coordinatorManager = new CoordinatorManager(coordinatorPort);
+        this.coordinatorGateway = new CoordinatorGateway(coordinatorPort);
 
         workerEndpoint =
                 new WorkerEndpoint(this::createTask, this::getTaskDetails, this::getAllTasks);
@@ -98,7 +98,7 @@ public class Worker {
 
     private void registerWorkerWithCoordinator(String serverPort) throws IOException {
         try {
-            coordinatorManager.registerWorker(serverPort);
+            coordinatorGateway.registerWorker(serverPort);
             System.out.println("Worker successfully registered with coordinator.");
         } catch (Exception e) {
             throw new IOException(
@@ -193,7 +193,7 @@ public class Worker {
 
     private void notifyTaskEndToCoordinator(TaskDetails details) {
         try {
-            coordinatorManager.notifyTask(details);
+            coordinatorGateway.notifyTask(details);
         } catch (IOException | InterruptedException e) {
             System.err.println(
                     details.taskId() + "Failed to notify task completion: " + e.getMessage());

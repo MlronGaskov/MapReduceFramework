@@ -65,7 +65,7 @@ class WorkerEndpointTest {
 
     @Test
     void testPutRequestCreatesTask() throws IOException {
-        NewTaskDetails newTask = new NewTaskDetails(1, TaskType.MAP, List.of("input1.txt"));
+        NewTaskDetails newTask = new NewTaskDetails(1, TaskType.MAP, List.of("input1.txt"), null);
         HttpURLConnection connection =
                 (HttpURLConnection) new URL("http://localhost:8080/tasks").openConnection();
         connection.setRequestMethod("PUT");
