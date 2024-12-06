@@ -80,8 +80,6 @@ public class Coordinator {
     }
 
     public void start(List<Path> inputFiles) throws InterruptedException {
-        waitForWorker();
-
         int numberOfProcessedInputFiles = 0;
         for (int i = 0; i < mappersCount; ++i) {
             int inputFilesToProcessCount =
@@ -103,7 +101,8 @@ public class Coordinator {
                     new NewTaskDetails(
                             mappersCount + i, TaskType.REDUCE, interFilesToReduce, null));
         }
-        distributeTasks();
+
+        waitForWorker();
         waitForJobEnd();
         Thread.sleep(100);
         endpoint.stopServer();
@@ -111,6 +110,7 @@ public class Coordinator {
 
     private synchronized void registerWorker(String port) {
         workers.add(new ConnectedWorker(port));
+        distributeTasks();
         notifyAll();
     }
 
