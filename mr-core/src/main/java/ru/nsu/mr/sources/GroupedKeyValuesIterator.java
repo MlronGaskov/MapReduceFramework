@@ -10,36 +10,51 @@ public class GroupedKeyValuesIterator<K, V>
         implements Iterator<Pair<K, Iterator<V>>>, AutoCloseableSource {
     private final Iterator<Pair<K, V>> inputIterator;
     private Pair<K, V> currentInputRecord;
+    private long currentInputRecordIndex = -1;
+    private K currentGroupKey = null;
 
     public GroupedKeyValuesIterator(Iterator<Pair<K, V>> inputIterator) {
         this.inputIterator = inputIterator;
-        if (inputIterator.hasNext()) {
-            currentInputRecord = inputIterator.next();
+        moveCurrentInputRecord();
+    }
+
+    private void moveCurrentInputRecord() {
+        currentInputRecord = inputIterator.hasNext() ? inputIterator.next() : null;
+        currentInputRecordIndex += 1;
+    }
+
+    private void skipCurrentIterator() {
+        while (currentInputRecord != null && currentInputRecord.key().equals(currentGroupKey)) {
+            moveCurrentInputRecord();
         }
     }
 
     @Override
     public boolean hasNext() {
+        skipCurrentIterator();
         return currentInputRecord != null;
     }
 
     @Override
     public Pair<K, Iterator<V>> next() {
-        // TODO: roll current group iterator till the end of the group
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
-
         K groupKey = currentInputRecord.key();
+        currentGroupKey = groupKey;
 
         return new Pair<>(
                 groupKey,
                 new Iterator<>() {
-                    private V groupCurrentValue = currentInputRecord.value();
+                    private long groupValueIndex = currentInputRecordIndex;
 
                     @Override
                     public boolean hasNext() {
-                        return groupCurrentValue != null;
+                        if (groupValueIndex != currentInputRecordIndex) {
+                            throw new RuntimeException("This iterator is not current.");
+                        }
+                        return currentInputRecord != null
+                                && groupKey.equals(currentInputRecord.key());
                     }
 
                     @Override
@@ -48,13 +63,9 @@ public class GroupedKeyValuesIterator<K, V>
                             throw new NoSuchElementException();
                         }
 
-                        V result = groupCurrentValue;
-                        groupCurrentValue = null;
-                        currentInputRecord = inputIterator.hasNext() ? inputIterator.next() : null;
-                        if (currentInputRecord != null
-                                && currentInputRecord.key().equals(groupKey)) {
-                            groupCurrentValue = currentInputRecord.value();
-                        }
+                        V result = currentInputRecord.value();
+                        moveCurrentInputRecord();
+                        groupValueIndex += 1;
                         return result;
                     }
                 });

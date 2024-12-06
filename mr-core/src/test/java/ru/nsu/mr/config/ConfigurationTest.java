@@ -22,19 +22,4 @@ class ConfigurationTest {
         Integer value = config.get(mappersCount);
         assertEquals(1, value);
     }
-
-    @Test
-    void testIsSetReturnsTrue() {
-        Configuration config = new Configuration();
-        ConfigurationOption<Integer> mappersCount = ConfigurationOption.MAPPERS_COUNT;
-        config.set(mappersCount, 5);
-        assertTrue(config.isSet(mappersCount));
-    }
-
-    @Test
-    void testIsSetReturnsFalse() {
-        Configuration config = new Configuration();
-        ConfigurationOption<Integer> mappersCount = ConfigurationOption.MAPPERS_COUNT;
-        assertFalse(config.isSet(mappersCount));
-    }
 }

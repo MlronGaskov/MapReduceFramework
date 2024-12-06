@@ -8,7 +8,7 @@ import ru.nsu.mr.endpoints.MetricsService;
 import ru.nsu.mr.endpoints.dto.NewTaskDetails;
 import ru.nsu.mr.endpoints.dto.TaskDetails;
 import ru.nsu.mr.endpoints.dto.TaskType;
-import ru.nsu.mr.manager.WorkerManager;
+import ru.nsu.mr.gateway.WorkerGateway;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -25,12 +25,12 @@ public class Coordinator {
 
     private static class ConnectedWorker {
         private final String port;
-        private final WorkerManager manager;
+        private final WorkerGateway manager;
         private Integer currentTaskId = null;
 
         public ConnectedWorker(String port) {
             this.port = port;
-            this.manager = new WorkerManager(port);
+            this.manager = new WorkerGateway(port);
         }
 
         public synchronized boolean isFree() {
@@ -45,7 +45,7 @@ public class Coordinator {
             this.currentTaskId = null;
         }
 
-        public synchronized WorkerManager getManager() {
+        public synchronized WorkerGateway getManager() {
             return manager;
         }
     }
@@ -80,8 +80,6 @@ public class Coordinator {
     }
 
     public void start(List<Path> inputFiles) throws InterruptedException {
-        waitForWorker();
-
         int numberOfProcessedInputFiles = 0;
         for (int i = 0; i < mappersCount; ++i) {
             int inputFilesToProcessCount =
@@ -90,7 +88,7 @@ public class Coordinator {
             for (int k = 0; k < inputFilesToProcessCount; ++k) {
                 inputFilesToProcess.add(inputFiles.get(numberOfProcessedInputFiles + k).toString());
             }
-            mapTaskQueue.add(new NewTaskDetails(i, TaskType.MAP, inputFilesToProcess));
+            mapTaskQueue.add(new NewTaskDetails(i, TaskType.MAP, inputFilesToProcess, null));
             numberOfProcessedInputFiles += inputFilesToProcessCount;
         }
 
@@ -100,9 +98,11 @@ public class Coordinator {
                 interFilesToReduce.add("mapper-output-" + k + "-" + i + ".txt");
             }
             reduceTaskQueue.add(
-                    new NewTaskDetails(mappersCount + i, TaskType.REDUCE, interFilesToReduce));
+                    new NewTaskDetails(
+                            mappersCount + i, TaskType.REDUCE, interFilesToReduce, null));
         }
-        distributeTasks();
+
+        waitForWorker();
         waitForJobEnd();
         Thread.sleep(100);
         endpoint.stopServer();
@@ -110,6 +110,7 @@ public class Coordinator {
 
     private synchronized void registerWorker(String port) {
         workers.add(new ConnectedWorker(port));
+        distributeTasks();
         notifyAll();
     }
 
@@ -133,7 +134,8 @@ public class Coordinator {
             Queue<NewTaskDetails> targetQueue =
                     details.taskType() == TaskType.MAP ? mapTaskQueue : reduceTaskQueue;
             targetQueue.add(
-                    new NewTaskDetails(details.taskId(), details.taskType(), details.inputFiles()));
+                    new NewTaskDetails(
+                            details.taskId(), details.taskType(), details.inputFiles(), null));
             return;
         }
 
