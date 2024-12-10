@@ -103,6 +103,7 @@ public class Worker {
 
     private void registerWorkerWithCoordinator(String serverPort) throws IOException {
         try {
+            LOGGER.debug("Registering worker {} on port: {}.", this.hashCode(), serverPort);
             coordinatorManager.registerWorker(serverPort);
             LOGGER.info("Worker {} successfully registered with coordinator.", this.hashCode());
         } catch (Exception e) {
@@ -125,6 +126,9 @@ public class Worker {
                         taskDetails.taskId(),
                         taskDetails.taskType(),
                         taskDetails.inputFiles().stream().map(Path::of).toList());
+
+        LOGGER.debug("On worker {} created task with id: {}, type: {}", this.hashCode(),
+                taskDetails.taskId(), taskDetails.taskType());
 
         notify();
         return currentTask.getTaskDetails();
