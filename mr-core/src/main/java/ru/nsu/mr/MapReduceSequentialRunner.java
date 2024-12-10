@@ -44,7 +44,6 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
         logger.jobStart(jobId);
 
         int mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
-
         int numberOfProcessedInputFiles = 0;
         for (int i = 0; i < mappersCount; ++i) {
             int inputFilesToProcessCount =
@@ -62,6 +61,7 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             }
             numberOfProcessedInputFiles += inputFilesToProcessCount;
         }
+
         for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); ++i) {
             List<Path> interFilesToReduce = new ArrayList<>();
             for (int k = 0; k < mappersCount; ++k) {

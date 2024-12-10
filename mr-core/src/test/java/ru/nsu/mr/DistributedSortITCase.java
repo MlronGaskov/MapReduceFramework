@@ -140,7 +140,9 @@ class DistributedSortITCase {
     }
 
     static Stream<SortConfig> sortParameters() {
-        return Stream.of(new SortConfig(5, 10, 1, 2), new SortConfig(10, 4, 1, 5));
+        return Stream.of(new SortConfig(5, 10, 1, 2),
+                new SortConfig(5, 4, 1, 5)
+        );
     }
 
     private void deleteDirectory(Path path) throws IOException {

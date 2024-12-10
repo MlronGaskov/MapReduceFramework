@@ -7,15 +7,26 @@
 
     <Appenders>
         <Console name="CONSOLE">
-            <JsonTemplateLayout/>
+            <PatternLayout pattern="%d [%t] %5p %c{1.} - %m%n"/>
         </Console>
+        <File name="MAIN" fileName="logs/main.log">
+            <PatternLayout pattern="%d [%t] %5p %c{1.} - %m%n"/>
+        </File>
+        <File name="DEBUG_LOG" fileName="logs/debug.log">
+            <PatternLayout pattern="%d [%t] %5p %c{1.} - %m%n"/>
+        </File>
     </Appenders>
 
     <Loggers>
-        <Logger name="ru.nsu.mr" level="INFO"/>
-        <Root level="WARN">
-            <AppenderRef ref="CONSOLE"/>
+        <Root level="INFO">
+            <AppenderRef ref="MAIN"/>
         </Root>
+        <Logger name="ru.nsu.mr" level="WARN">
+            <AppenderRef ref="CONSOLE"/>
+        </Logger>
+        <Logger name="ru.nsu.mr" level="DEBUG">
+            <AppenderRef ref="DEBUG_LOG"/>
+        </Logger>
     </Loggers>
 
 </Configuration>
