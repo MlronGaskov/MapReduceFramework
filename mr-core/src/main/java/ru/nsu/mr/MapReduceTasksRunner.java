@@ -1,7 +1,5 @@
 package ru.nsu.mr;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.sinks.FileSink;
@@ -19,6 +17,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class MapReduceTasksRunner {
     private static final Logger LOGGER = LogManager.getLogger();

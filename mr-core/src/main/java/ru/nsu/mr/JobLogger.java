@@ -1,6 +1,6 @@
 package ru.nsu.mr;
 
-public interface Logger {
+public interface JobLogger {
     void jobReceived(String jobId, String jobName);
 
     void jobStart(String jobId);

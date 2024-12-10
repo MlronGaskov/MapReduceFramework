@@ -21,7 +21,7 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             Configuration configuration,
             Path mappersOutputDirectory,
             Path outputDirectory) {
-        Logger logger = new LoggerWithMetricsCalculation();
+        JobLogger logger = new LoggerWithMetricsCalculation();
         CoordinatorEndpoint endpoint = null;
 
         if (!configuration.get(ConfigurationOption.METRICS_PORT).isEmpty()) {

@@ -191,6 +191,7 @@ public class Worker {
                         configuration,
                         job);
             }
+            LOGGER.info("Worker: {} finished executing task: {}", this.hashCode(), currentTask.taskId);
             markTaskAsSucceeded();
         } catch (IOException e) {
             LOGGER.error("Task ID: {} failed with exception.", currentTask.taskId, e);
