@@ -1,4 +1,4 @@
-package ru.nsu.mr.manager;
+package ru.nsu.mr.gateway;
 
 import com.google.gson.Gson;
 
@@ -7,19 +7,19 @@ import ru.nsu.mr.endpoints.dto.TaskDetails;
 import java.io.IOException;
 import java.net.http.HttpClient;
 
-public class CoordinatorManager {
+public class CoordinatorGateway {
     private final String coordinatorBaseUrl;
     private final HttpClient httpClient;
     private final Gson gson;
 
-    public CoordinatorManager(String port) {
+    public CoordinatorGateway(String port) {
         this.coordinatorBaseUrl = "http://localhost:" + port;
         this.httpClient = HttpClient.newHttpClient();
         this.gson = new Gson();
     }
 
     public void registerWorker(String workerPort) throws IOException, InterruptedException {
-        String endpoint = coordinatorBaseUrl + "/registerWorker";
+        String endpoint = coordinatorBaseUrl + "/workers";
         HttpUtils.sendPostRequest(
                 httpClient, gson, endpoint, workerPort, Void.class, "Failed to register worker");
     }

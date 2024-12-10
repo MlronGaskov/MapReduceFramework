@@ -46,7 +46,7 @@ public class CoordinatorEndpoint {
     private void configureEndpoints() {
         httpServer.createContext("/jobs", new JobListHandler());
         httpServer.createContext("/jobs/", new JobDetailsHandler());
-        httpServer.createContext("/registerWorker", new WorkerRegistrationHandler());
+        httpServer.createContext("/workers", new WorkerRegistrationHandler());
         httpServer.createContext("/notifyTask", new TaskNotificationHandler());
     }
 

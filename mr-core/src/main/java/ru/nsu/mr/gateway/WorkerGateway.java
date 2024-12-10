@@ -1,4 +1,4 @@
-package ru.nsu.mr.manager;
+package ru.nsu.mr.gateway;
 
 import com.google.gson.Gson;
 
@@ -8,12 +8,12 @@ import ru.nsu.mr.endpoints.dto.TaskDetails;
 import java.io.IOException;
 import java.net.http.HttpClient;
 
-public class WorkerManager {
+public class WorkerGateway {
     private final String workerBaseUrl;
     private final HttpClient httpClient;
     private final Gson gson;
 
-    public WorkerManager(String port) {
+    public WorkerGateway(String port) {
         this.workerBaseUrl = "http://localhost:" + port + "/tasks";
         this.httpClient = HttpClient.newHttpClient();
         this.gson = new Gson();
