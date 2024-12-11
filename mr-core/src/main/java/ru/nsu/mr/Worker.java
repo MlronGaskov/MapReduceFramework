@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+
 public class Worker {
 
     private static final class Task {
@@ -74,6 +77,8 @@ public class Worker {
     private final Map<Integer, Task> previousTasks = new HashMap<>();
     private final WorkerEndpoint workerEndpoint;
 
+    private static final Logger LOGGER = LogManager.getLogger();
+
     public Worker(
             MapReduceJob<?, ?, ?, ?> job,
             Configuration configuration,
@@ -98,16 +103,21 @@ public class Worker {
 
     private void registerWorkerWithCoordinator(String serverPort) throws IOException {
         try {
+            LOGGER.debug("Registering worker {} on port: {}.", this.hashCode(), serverPort);
             coordinatorGateway.registerWorker(serverPort);
-            System.out.println("Worker successfully registered with coordinator.");
+            LOGGER.info("Worker {} successfully registered with coordinator.", this.hashCode());
         } catch (Exception e) {
+            LOGGER.error("Failed to register worker {} with coordinator: .", this.hashCode(), e);
             throw new IOException(
                     "Failed to register worker with coordinator: " + e.getMessage(), e);
         }
     }
 
     public synchronized TaskDetails createTask(NewTaskDetails taskDetails) {
+        LOGGER.info("Creating task with ID: {}.", taskDetails.taskId());
         if (currentTask != null) {
+            LOGGER.warn("The worker is currently busy with another task. Task ID: {}.",
+                    taskDetails.taskId());
             throw new IllegalStateException("The worker is currently busy with another task.");
         }
 
@@ -116,6 +126,9 @@ public class Worker {
                         taskDetails.taskId(),
                         taskDetails.taskType(),
                         taskDetails.inputFiles().stream().map(Path::of).toList());
+
+        LOGGER.debug("On worker {} created task with id: {}, type: {}", this.hashCode(),
+                taskDetails.taskId(), taskDetails.taskType());
 
         notify();
         return currentTask.getTaskDetails();
@@ -162,6 +175,7 @@ public class Worker {
     private void executeCurrentTask() {
         try {
             if (currentTask.taskType.equals(TaskType.MAP)) {
+                LOGGER.info("Executing MAP task ID: {}.", currentTask.taskId);
                 MapReduceTasksRunner.executeMapperTask(
                         currentTask.inputFiles,
                         currentTask.taskId,
@@ -169,6 +183,7 @@ public class Worker {
                         configuration,
                         job);
             } else if (currentTask.taskType.equals(TaskType.REDUCE)) {
+                LOGGER.info("Executing REDUCE task ID: {}.", currentTask.taskId);
                 MapReduceTasksRunner.executeReduceTask(
                         currentTask.inputFiles.stream().map(mappersOutputPath::resolve).toList(),
                         currentTask.taskId - configuration.get(ConfigurationOption.MAPPERS_COUNT),
@@ -176,8 +191,10 @@ public class Worker {
                         configuration,
                         job);
             }
+            LOGGER.info("Worker: {} finished executing task: {}", this.hashCode(), currentTask.taskId);
             markTaskAsSucceeded();
         } catch (IOException e) {
+            LOGGER.error("Task ID: {} failed with exception.", currentTask.taskId, e);
             markTaskAsFailed(e);
         }
     }
@@ -194,13 +211,15 @@ public class Worker {
     private void notifyTaskEndToCoordinator(TaskDetails details) {
         try {
             coordinatorGateway.notifyTask(details);
+            LOGGER.info("Notified coordinator about task completion for Task ID: {}.",
+                    details.taskId());
         } catch (IOException | InterruptedException e) {
-            System.err.println(
-                    details.taskId() + "Failed to notify task completion: " + e.getMessage());
+            LOGGER.error("Failed to notify task completion for Task ID: {}.",details.taskId(), e);
         }
     }
 
     private synchronized void moveCurrentTaskToHistory() {
+        LOGGER.info("Moving task ID: {} to history.", currentTask.taskId);
         previousTasks.put(currentTask.taskId, currentTask);
         currentTask = null;
     }

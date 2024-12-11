@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.Test;
 
-import ru.nsu.mr.Logger;
+import ru.nsu.mr.JobLogger;
 import ru.nsu.mr.endpoints.dto.JobDetails;
 import ru.nsu.mr.endpoints.dto.JobState;
 import ru.nsu.mr.endpoints.dto.JobSummary;
@@ -19,7 +19,7 @@ public class LoggerWithMetricsCalculationTest {
         String job2id = "2024-01-01T02:01";
         String job3id = "2024-01-01T03:01";
 
-        Logger logger = new LoggerWithMetricsCalculation();
+        JobLogger logger = new LoggerWithMetricsCalculation();
         MetricsService metricsService = (MetricsService) logger;
 
         logger.jobReceived(job1id, job1id);

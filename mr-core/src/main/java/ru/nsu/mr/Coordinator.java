@@ -15,6 +15,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+
 public class Coordinator {
 
     private enum Phase {
@@ -54,7 +57,7 @@ public class Coordinator {
     private final Queue<NewTaskDetails> mapTaskQueue = new ConcurrentLinkedQueue<>();
     private final Queue<NewTaskDetails> reduceTaskQueue = new ConcurrentLinkedQueue<>();
     private final Configuration configuration;
-    private final Logger logger;
+    private final JobLogger jobLogger;
 
     private final int mappersCount;
     private final int reducersCount;
@@ -63,9 +66,11 @@ public class Coordinator {
     private Phase currentPhase = Phase.MAP;
     private CoordinatorEndpoint endpoint;
 
+    private static final Logger LOGGER = LogManager.getLogger();
+
     public Coordinator(Configuration config) throws IOException {
         this.configuration = config;
-        this.logger = new LoggerWithMetricsCalculation();
+        this.jobLogger = new LoggerWithMetricsCalculation();
 
         this.mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
         this.reducersCount = configuration.get(ConfigurationOption.REDUCERS_COUNT);
@@ -73,13 +78,17 @@ public class Coordinator {
         endpoint =
                 new CoordinatorEndpoint(
                         configuration.get(ConfigurationOption.METRICS_PORT),
-                        (MetricsService) logger,
+                        (MetricsService) jobLogger,
                         this::registerWorker,
                         this::receiveTaskCompletion);
         endpoint.startServer();
     }
 
     public void start(List<Path> inputFiles) throws InterruptedException {
+        waitForWorker();
+
+        LOGGER.debug("Mappers quantity: {}.", mappersCount);
+
         int numberOfProcessedInputFiles = 0;
         for (int i = 0; i < mappersCount; ++i) {
             int inputFilesToProcessCount =
@@ -92,6 +101,7 @@ public class Coordinator {
             numberOfProcessedInputFiles += inputFilesToProcessCount;
         }
 
+        LOGGER.debug("Reducers quantity: {}.", reducersCount);
         for (int i = 0; i < reducersCount; ++i) {
             List<String> interFilesToReduce = new ArrayList<>();
             for (int k = 0; k < mappersCount; ++k) {
@@ -120,13 +130,13 @@ public class Coordinator {
                 finishedMappersCount++;
                 if (finishedMappersCount == mappersCount) {
                     currentPhase = Phase.REDUCE;
-                    System.out.println("All MAP tasks completed. Transitioning to REDUCE phase.");
+                    LOGGER.info("All MAP tasks have been completed. Transitioning to REDUCE phase.");
                 }
             } else {
                 finishedReducersCount++;
                 if (finishedReducersCount == reducersCount) {
                     currentPhase = Phase.JOB_ENDED;
-                    System.out.println("Job ended.");
+                    LOGGER.info("Job has ended.");
                     notifyAll();
                 }
             }
@@ -144,12 +154,14 @@ public class Coordinator {
                 .findFirst()
                 .ifPresent(ConnectedWorker::release);
 
-        System.out.println("Task " + details.taskId() + " completed.");
+        LOGGER.info("Task: {} has been completed.", details.taskId());
 
         distributeTasks();
     }
 
     private synchronized void distributeTasks() {
+        LOGGER.info("Coordinator started distributing tasks.");
+
         Queue<NewTaskDetails> currentTaskQueue =
                 currentPhase == Phase.MAP ? mapTaskQueue : reduceTaskQueue;
 
@@ -160,20 +172,15 @@ public class Coordinator {
             if (freeWorker.isPresent()) {
                 NewTaskDetails task = currentTaskQueue.poll();
                 ConnectedWorker worker = freeWorker.get();
+                LOGGER.debug("Current free worker: {}", worker.hashCode());
                 try {
                     worker.getManager().createTask(task);
                     worker.assignTask(task.taskId());
-                    System.out.println(
-                            "Assigned task "
-                                    + task.taskId()
-                                    + " to worker on port: "
-                                    + worker.port);
+                    LOGGER.info("Coordinator assigned task: {} to the worker on port: {}",
+                            task.taskId(), worker.port);
                 } catch (IOException | InterruptedException e) {
-                    System.err.println(
-                            "Failed to assign task "
-                                    + task.taskId()
-                                    + " to worker on port: "
-                                    + worker.port);
+                    LOGGER.error("Coordinator failed to assign task: {} to the worker on port: {}",
+                            task.taskId(), worker.port);
                     currentTaskQueue.add(task);
                     break;
                 }
@@ -181,6 +188,7 @@ public class Coordinator {
                 break;
             }
         }
+        LOGGER.info("Coordinator finished distributing tasks.");
     }
 
     private synchronized void waitForWorker() throws InterruptedException {

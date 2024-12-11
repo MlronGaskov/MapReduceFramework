@@ -18,7 +18,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class MapReduceTasksRunner {
+    private static final Logger LOGGER = LogManager.getLogger();
+
     public static <K_I, V_I, K_O, V_O> void executeMapperTask(
             List<Path> filesToMap,
             int mapperId,
@@ -45,6 +50,8 @@ public class MapReduceTasksRunner {
         try (PartitionedFileSink<K_I, V_I> partitionedFileSink =
                 new PartitionedFileSink<>(sortedFileSinks, job.getHasher())) {
             for (Path inputFileToProcess : filesToMap) {
+                LOGGER.debug("Mapper: {} is reading file: {}.", mapperId, inputFileToProcess);
+
                 BufferedReader reader = Files.newBufferedReader(inputFileToProcess);
                 String line = reader.readLine();
 
@@ -72,6 +79,7 @@ public class MapReduceTasksRunner {
                             }
                         };
 
+                LOGGER.debug("Mapper {} started MAP function.", mapperId);
                 job.getMapper()
                         .map(
                                 iterator,
@@ -79,6 +87,8 @@ public class MapReduceTasksRunner {
                                     try {
                                         partitionedFileSink.put(outputKey, outputValue);
                                     } catch (IOException e) {
+                                        LOGGER.error("IO error while MAP function on mapper {}.",
+                                                mapperId, e);
                                         throw new RuntimeException();
                                     }
                                 });
@@ -113,6 +123,7 @@ public class MapReduceTasksRunner {
                                 new MergedKeyValueIterator<>(fileIterators, job.getComparator()))) {
             while (groupedIterator.hasNext()) {
                 Pair<K_I, Iterator<V_I>> currentGroup = groupedIterator.next();
+                LOGGER.debug("Reducer {} started REDUCE function.", reducerId);
                 job.getReducer()
                         .reduce(
                                 currentGroup.key(),
@@ -121,6 +132,8 @@ public class MapReduceTasksRunner {
                                     try {
                                         fileSink.put(outputKey, outputValue);
                                     } catch (IOException e) {
+                                        LOGGER.error("IO error while REDUCE function on reducer {}.",
+                                                reducerId, e);
                                         throw new RuntimeException(e);
                                     }
                                 });

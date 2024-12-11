@@ -1,6 +1,7 @@
 package ru.nsu.mr.endpoints;
 
-import ru.nsu.mr.Logger;
+import ru.nsu.mr.JobLogger;
+import ru.nsu.mr.JobLogger;
 import ru.nsu.mr.endpoints.dto.JobDetails;
 import ru.nsu.mr.endpoints.dto.JobState;
 import ru.nsu.mr.endpoints.dto.JobSummary;
@@ -8,7 +9,7 @@ import ru.nsu.mr.endpoints.dto.JobSummary;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class LoggerWithMetricsCalculation implements MetricsService, Logger {
+public class LoggerWithMetricsCalculation implements MetricsService, JobLogger {
 
     private static class Job {
         private final String jobId;
