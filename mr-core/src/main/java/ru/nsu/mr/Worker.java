@@ -7,11 +7,20 @@ import ru.nsu.mr.endpoints.dto.*;
 import ru.nsu.mr.gateway.CoordinatorGateway;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.appender.ConsoleAppender;
+import org.apache.logging.log4j.core.appender.FileAppender;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 
 public class Worker {
 
@@ -77,7 +86,11 @@ public class Worker {
     private final Map<Integer, Task> previousTasks = new HashMap<>();
     private final WorkerEndpoint workerEndpoint;
 
-    private static final Logger LOGGER = LogManager.getLogger();
+    private static Logger LOGGER = null;
+    private static LoggerContext context;
+    private static final Object lock = new Object();
+    private static boolean isConfigured = false;
+    private static ConfigurationBuilder<?> builder;
 
     public Worker(
             MapReduceJob<?, ?, ?, ?> job,
@@ -96,18 +109,75 @@ public class Worker {
 
         this.coordinatorGateway = new CoordinatorGateway(coordinatorPort);
 
+        configureLogging();
+
         workerEndpoint =
                 new WorkerEndpoint(this::createTask, this::getTaskDetails, this::getAllTasks);
         workerEndpoint.startServer(serverPort);
     }
 
+    private void configureLogging() throws IOException {
+        synchronized (lock) {
+            Path logPath = Path.of(configuration.get(ConfigurationOption.LOGS_PATH));
+
+            if (logPath.toString().isEmpty()) {
+                throw new IllegalArgumentException("Log path is not set in configuration.");
+            }
+            Files.createDirectories(logPath);
+            String logFileName = String.format("logs-worker-%s.log", this.serverPort);
+            Path logFile = logPath.resolve(logFileName);
+
+            if (!isConfigured) {
+                builder = ConfigurationBuilderFactory.newConfigurationBuilder();
+                builder.setStatusLevel(Level.ERROR);
+                builder.setConfigurationName("WorkerLogConfig");
+
+                builder.add(builder.newRootLogger(Level.DEBUG));
+                isConfigured = true;
+
+                context = (LoggerContext) LogManager.getContext(false);
+                context.start(builder.build());
+            }
+
+            // Appender for a file
+            String appenderName = "FileAppender-" + this.serverPort;
+            Appender fileAppender = FileAppender.newBuilder()
+                    .setName(appenderName)
+                    .withFileName(logFile.toString())
+                    .setLayout(PatternLayout.newBuilder()
+                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                            .build())
+                    .build();
+            fileAppender.start();
+
+            context.getConfiguration().addAppender(fileAppender);
+            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+
+            // Appender for console
+            String consoleAppenderName = "ConsoleAppender";
+            Appender consoleAppender = ConsoleAppender.newBuilder()
+                    .setName(consoleAppenderName)
+                    .setLayout(PatternLayout.newBuilder()
+                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                            .build())
+                    .build();
+            consoleAppender.start();
+
+            context.getConfiguration().addAppender(consoleAppender);
+            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+
+            context.updateLoggers();
+            LOGGER = LogManager.getLogger("worker-" + this.serverPort);
+        }
+    }
+
     private void registerWorkerWithCoordinator(String serverPort) throws IOException {
         try {
-            LOGGER.debug("Registering worker {} on port: {}.", this.hashCode(), serverPort);
+            LOGGER.debug("Registering worker on port: {}.", serverPort);
             coordinatorGateway.registerWorker(serverPort);
-            LOGGER.info("Worker {} successfully registered with coordinator.", this.hashCode());
+            LOGGER.info("Worker {} successfully registered with coordinator.", serverPort);
         } catch (Exception e) {
-            LOGGER.error("Failed to register worker {} with coordinator: .", this.hashCode(), e);
+            LOGGER.error("Failed to register worker {} with coordinator: .", serverPort, e);
             throw new IOException(
                     "Failed to register worker with coordinator: " + e.getMessage(), e);
         }
@@ -127,7 +197,7 @@ public class Worker {
                         taskDetails.taskType(),
                         taskDetails.inputFiles().stream().map(Path::of).toList());
 
-        LOGGER.debug("On worker {} created task with id: {}, type: {}", this.hashCode(),
+        LOGGER.debug("On worker {} created task with id: {}, type: {}", serverPort,
                 taskDetails.taskId(), taskDetails.taskType());
 
         notify();
@@ -191,7 +261,7 @@ public class Worker {
                         configuration,
                         job);
             }
-            LOGGER.info("Worker: {} finished executing task: {}", this.hashCode(), currentTask.taskId);
+            LOGGER.info("Worker: {} finished executing task: {}", serverPort, currentTask.taskId);
             markTaskAsSucceeded();
         } catch (IOException e) {
             LOGGER.error("Task ID: {} failed with exception.", currentTask.taskId, e);
