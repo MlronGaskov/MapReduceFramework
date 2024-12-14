@@ -11,12 +11,21 @@ import ru.nsu.mr.endpoints.dto.TaskType;
 import ru.nsu.mr.gateway.WorkerGateway;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.appender.ConsoleAppender;
+import org.apache.logging.log4j.core.appender.FileAppender;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 
 public class Coordinator {
 
@@ -66,7 +75,11 @@ public class Coordinator {
     private Phase currentPhase = Phase.MAP;
     private CoordinatorEndpoint endpoint;
 
-    private static final Logger LOGGER = LogManager.getLogger();
+    private static Logger LOGGER = null;
+    private static LoggerContext context;
+    private static final Object lock = new Object();
+    private static boolean isConfigured = false;
+    private static ConfigurationBuilder<?> builder;
 
     public Coordinator(Configuration config) throws IOException {
         this.configuration = config;
@@ -75,6 +88,8 @@ public class Coordinator {
         this.mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
         this.reducersCount = configuration.get(ConfigurationOption.REDUCERS_COUNT);
 
+        configureLogging();
+
         endpoint =
                 new CoordinatorEndpoint(
                         configuration.get(ConfigurationOption.METRICS_PORT),
@@ -82,6 +97,62 @@ public class Coordinator {
                         this::registerWorker,
                         this::receiveTaskCompletion);
         endpoint.startServer();
+    }
+
+    private void configureLogging() throws IOException {
+        synchronized (lock) {
+            Path logPath = Path.of(configuration.get(ConfigurationOption.LOGS_PATH));
+            String port = configuration.get(ConfigurationOption.METRICS_PORT);
+
+            if (logPath.toString().isEmpty()) {
+                throw new IllegalArgumentException("Log path is not set in configuration.");
+            }
+            Files.createDirectories(logPath);
+            String logFileName = String.format("logs-coordinator-%s.log", port);
+            Path logFile = logPath.resolve(logFileName);
+
+            if (!isConfigured) {
+                builder = ConfigurationBuilderFactory.newConfigurationBuilder();
+                builder.setStatusLevel(Level.ERROR);
+                builder.setConfigurationName("LogConfig");
+
+                builder.add(builder.newRootLogger(Level.DEBUG));
+                isConfigured = true;
+
+                context = (LoggerContext) LogManager.getContext(false);
+                context.start(builder.build());
+            }
+
+            // Appender for a file
+            String appenderName = "FileAppender-" + port;
+            Appender fileAppender = FileAppender.newBuilder()
+                    .setName(appenderName)
+                    .withFileName(logFile.toString())
+                    .setLayout(PatternLayout.newBuilder()
+                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                            .build())
+                    .build();
+            fileAppender.start();
+
+            context.getConfiguration().addAppender(fileAppender);
+            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+
+            // Appender for console
+            String consoleAppenderName = "ConsoleAppender";
+            Appender consoleAppender = ConsoleAppender.newBuilder()
+                    .setName(consoleAppenderName)
+                    .setLayout(PatternLayout.newBuilder()
+                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                            .build())
+                    .build();
+            consoleAppender.start();
+
+            context.getConfiguration().addAppender(consoleAppender);
+            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+
+            context.updateLoggers();
+            LOGGER = LogManager.getLogger("coordinator-" + port);
+        }
     }
 
     public void start(List<Path> inputFiles) throws InterruptedException {
@@ -172,7 +243,7 @@ public class Coordinator {
             if (freeWorker.isPresent()) {
                 NewTaskDetails task = currentTaskQueue.poll();
                 ConnectedWorker worker = freeWorker.get();
-                LOGGER.debug("Current free worker: {}", worker.hashCode());
+                LOGGER.debug("Current free worker on port: {}", worker.port);
                 try {
                     worker.getManager().createTask(task);
                     worker.assignTask(task.taskId());
