@@ -197,7 +197,7 @@ class WordCountITCase {
                 new TestParameters(
                         new WordCounterConfig(10, 10, 3, 4, 1), new MapReduceSequentialRunner()),
                 new TestParameters(
-                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner())
+                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner()));
 //                new TestParameters(new WordCounterConfig(10, 10, 3, 4, 2), new ParallelRunner()),
 //                new TestParameters(new WordCounterConfig(5, 50, 2, 3, 3), new ParallelRunner()),
 //                new TestParameters(
