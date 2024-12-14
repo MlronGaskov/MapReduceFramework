@@ -156,7 +156,6 @@ public class Coordinator {
     }
 
     public void start(List<Path> inputFiles) throws InterruptedException {
-        waitForWorker();
 
         LOGGER.debug("Mappers quantity: {}.", mappersCount);
 
