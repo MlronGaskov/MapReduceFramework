@@ -21,10 +21,7 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     implementation 'org.yaml:snakeyaml:2.3'
 
-    implementation platform('org.apache.logging.log4j:log4j-bom:2.24.2')
-    implementation 'org.apache.logging.log4j:log4j-api:${log4j-api.version}'
-    implementation 'org.apache.logging.log4j:log4j-core'
-    implementation 'org.apache.logging.log4j:log4j-layout-template-json'
+    implementation 'log4j:log4j:1.2.17'
 }
 
 publishing {
