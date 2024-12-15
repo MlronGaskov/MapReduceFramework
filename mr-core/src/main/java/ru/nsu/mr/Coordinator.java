@@ -1,5 +1,11 @@
 package ru.nsu.mr;
 
+import org.apache.log4j.ConsoleAppender;
+import org.apache.log4j.FileAppender;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.SimpleLayout;
+
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.CoordinatorEndpoint;
@@ -11,21 +17,9 @@ import ru.nsu.mr.endpoints.dto.TaskType;
 import ru.nsu.mr.gateway.WorkerGateway;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.Appender;
-import org.apache.logging.log4j.core.appender.ConsoleAppender;
-import org.apache.logging.log4j.core.appender.FileAppender;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
-import org.apache.logging.log4j.core.layout.PatternLayout;
 
 public class Coordinator {
 
@@ -75,11 +69,8 @@ public class Coordinator {
     private Phase currentPhase = Phase.MAP;
     private CoordinatorEndpoint endpoint;
 
-    private static Logger LOGGER = null;
-    private static LoggerContext context;
-    private static final Object lock = new Object();
-    private static boolean isConfigured = false;
-    private static ConfigurationBuilder<?> builder;
+    // Создаём логгер
+    private static final Logger LOG = Logger.getLogger(Coordinator.class);
 
     public Coordinator(Configuration config) throws IOException {
         this.configuration = config;
@@ -88,7 +79,10 @@ public class Coordinator {
         this.mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
         this.reducersCount = configuration.get(ConfigurationOption.REDUCERS_COUNT);
 
-        configureLogging();
+        // Инициализация логирования
+        initLogging();
+
+        LOG.info("Coordinator is starting...");
 
         endpoint =
                 new CoordinatorEndpoint(
@@ -99,65 +93,28 @@ public class Coordinator {
         endpoint.startServer();
     }
 
-    private void configureLogging() throws IOException {
-        synchronized (lock) {
-            Path logPath = Path.of(configuration.get(ConfigurationOption.LOGS_PATH));
-            String port = configuration.get(ConfigurationOption.METRICS_PORT);
+    private void initLogging() throws IOException {
+        String logsPath = configuration.get(ConfigurationOption.LOGS_PATH);
+        String metricsPort = configuration.get(ConfigurationOption.METRICS_PORT);
+        String logFileName = logsPath + "/coordinator" + metricsPort + ".log";
 
-            if (logPath.toString().isEmpty()) {
-                throw new IllegalArgumentException("Log path is not set in configuration.");
-            }
-            Files.createDirectories(logPath);
-            String logFileName = String.format("logs-coordinator-%s.log", port);
-            Path logFile = logPath.resolve(logFileName);
+        // Настраиваем простой формат для логов
+        SimpleLayout layout = new SimpleLayout();
 
-            if (!isConfigured) {
-                builder = ConfigurationBuilderFactory.newConfigurationBuilder();
-                builder.setStatusLevel(Level.ERROR);
-                builder.setConfigurationName("LogConfig");
+        // Файловый аппендер с дозаписью
+        FileAppender fileAppender = new FileAppender(layout, logFileName, true);
+        // Консольный аппендер
+        ConsoleAppender consoleAppender = new ConsoleAppender(layout);
 
-                builder.add(builder.newRootLogger(Level.DEBUG));
-                isConfigured = true;
-
-                context = (LoggerContext) LogManager.getContext(false);
-                context.start(builder.build());
-            }
-
-            // Appender for a file
-            String appenderName = "FileAppender-" + port;
-            Appender fileAppender = FileAppender.newBuilder()
-                    .setName(appenderName)
-                    .withFileName(logFile.toString())
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            fileAppender.start();
-
-            context.getConfiguration().addAppender(fileAppender);
-            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
-
-            // Appender for console
-            String consoleAppenderName = "ConsoleAppender";
-            Appender consoleAppender = ConsoleAppender.newBuilder()
-                    .setName(consoleAppenderName)
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            consoleAppender.start();
-
-            context.getConfiguration().addAppender(consoleAppender);
-            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
-
-            context.updateLoggers();
-            LOGGER = LogManager.getLogger("coordinator-" + port);
-        }
+        // Настраиваем корневой логгер
+        Logger rootLogger = Logger.getRootLogger();
+        rootLogger.setLevel(Level.DEBUG); // Можно настроить уровень логирования
+        rootLogger.addAppender(fileAppender);
+        rootLogger.addAppender(consoleAppender);
     }
 
     public void start(List<Path> inputFiles) throws InterruptedException {
-
-        LOGGER.debug("Mappers quantity: {}.", mappersCount);
+        LOG.info("Starting job...");
 
         int numberOfProcessedInputFiles = 0;
         for (int i = 0; i < mappersCount; ++i) {
@@ -171,7 +128,6 @@ public class Coordinator {
             numberOfProcessedInputFiles += inputFilesToProcessCount;
         }
 
-        LOGGER.debug("Reducers quantity: {}.", reducersCount);
         for (int i = 0; i < reducersCount; ++i) {
             List<String> interFilesToReduce = new ArrayList<>();
             for (int k = 0; k < mappersCount; ++k) {
@@ -186,31 +142,39 @@ public class Coordinator {
         waitForJobEnd();
         Thread.sleep(100);
         endpoint.stopServer();
+        LOG.info("Job ended.");
     }
 
     private synchronized void registerWorker(String port) {
+        LOG.info("Registering worker at port: " + port);
         workers.add(new ConnectedWorker(port));
         distributeTasks();
         notifyAll();
     }
 
     private synchronized void receiveTaskCompletion(TaskDetails details) {
+        LOG.info(
+                "Received task completion: "
+                        + details.taskId()
+                        + " with status: "
+                        + details.status());
         if ("SUCCEED".equals(details.status())) {
             if (details.taskType() == TaskType.MAP) {
                 finishedMappersCount++;
                 if (finishedMappersCount == mappersCount) {
                     currentPhase = Phase.REDUCE;
-                    LOGGER.info("All MAP tasks have been completed. Transitioning to REDUCE phase.");
+                    LOG.info("All map tasks finished. Moving to reduce phase.");
                 }
             } else {
                 finishedReducersCount++;
                 if (finishedReducersCount == reducersCount) {
                     currentPhase = Phase.JOB_ENDED;
-                    LOGGER.info("Job has ended.");
+                    LOG.info("All reduce tasks finished. Job ended.");
                     notifyAll();
                 }
             }
         } else {
+            LOG.warn("Task " + details.taskId() + " failed. Re-queueing task.");
             Queue<NewTaskDetails> targetQueue =
                     details.taskType() == TaskType.MAP ? mapTaskQueue : reduceTaskQueue;
             targetQueue.add(
@@ -224,14 +188,11 @@ public class Coordinator {
                 .findFirst()
                 .ifPresent(ConnectedWorker::release);
 
-        LOGGER.info("Task: {} has been completed.", details.taskId());
-
         distributeTasks();
     }
 
     private synchronized void distributeTasks() {
-        LOGGER.info("Coordinator started distributing tasks.");
-
+        LOG.debug("Distributing tasks...");
         Queue<NewTaskDetails> currentTaskQueue =
                 currentPhase == Phase.MAP ? mapTaskQueue : reduceTaskQueue;
 
@@ -242,34 +203,40 @@ public class Coordinator {
             if (freeWorker.isPresent()) {
                 NewTaskDetails task = currentTaskQueue.poll();
                 ConnectedWorker worker = freeWorker.get();
-                LOGGER.debug("Current free worker on port: {}", worker.port);
                 try {
+                    LOG.info(
+                            "Assigning task "
+                                    + task.taskId()
+                                    + " to worker on port "
+                                    + worker.port);
                     worker.getManager().createTask(task);
                     worker.assignTask(task.taskId());
-                    LOGGER.info("Coordinator assigned task: {} to the worker on port: {}",
-                            task.taskId(), worker.port);
                 } catch (IOException | InterruptedException e) {
-                    LOGGER.error("Coordinator failed to assign task: {} to the worker on port: {}",
-                            task.taskId(), worker.port);
+                    LOG.error(
+                            "Error while assigning task " + task.taskId() + ": " + e.getMessage());
                     currentTaskQueue.add(task);
                     break;
                 }
             } else {
+                LOG.debug("No free workers available at the moment.");
                 break;
             }
         }
-        LOGGER.info("Coordinator finished distributing tasks.");
     }
 
     private synchronized void waitForWorker() throws InterruptedException {
+        LOG.debug("Waiting for at least one worker to register...");
         while (workers.isEmpty()) {
             wait();
         }
+        LOG.debug("At least one worker registered, continuing.");
     }
 
     private synchronized void waitForJobEnd() throws InterruptedException {
+        LOG.debug("Waiting for job to end...");
         while (currentPhase != Phase.JOB_ENDED) {
             wait();
         }
+        LOG.debug("Job ended, proceeding.");
     }
 }

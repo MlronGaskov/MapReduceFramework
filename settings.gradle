@@ -1,4 +1,5 @@
 rootProject.name = 'mr'
 include 'mr-core'
 include 'mr-examples'
+include 'mr-app'
 
