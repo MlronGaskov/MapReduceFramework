@@ -16,9 +16,6 @@ public class ConfigurationOption<T> {
     public static ConfigurationOption<String> METRICS_PORT =
             new ConfigurationOption<>("endpoints.metrics.port", "");
 
-    public static ConfigurationOption<String> LOGS_PATH =
-            new ConfigurationOption<>("logs.path", "");
-
     public static ConfigurationOption<Integer> WORKERS_COUNT =
             new ConfigurationOption<>("runtime.worker.count", 1);
 
