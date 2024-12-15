@@ -22,6 +22,9 @@ public class ConfigurationOption<T> {
     public static ConfigurationOption<Integer> WORKERS_COUNT =
             new ConfigurationOption<>("runtime.worker.count", 1);
 
+    public static ConfigurationOption<String> LOGS_PATH =
+            new ConfigurationOption<>("logs.path", "");
+
     public ConfigurationOption(String name, T defaultValue) {
         this.name = name;
         this.defaultValue = defaultValue;

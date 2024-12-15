@@ -23,8 +23,8 @@ dependencies {
 
     implementation platform('org.apache.logging.log4j:log4j-bom:2.24.2')
     implementation 'org.apache.logging.log4j:log4j-api:${log4j-api.version}'
-    runtimeOnly 'org.apache.logging.log4j:log4j-core'
-    runtimeOnly 'org.apache.logging.log4j:log4j-layout-template-json'
+    implementation 'org.apache.logging.log4j:log4j-core'
+    implementation 'org.apache.logging.log4j:log4j-layout-template-json'
 }
 
 publishing {
