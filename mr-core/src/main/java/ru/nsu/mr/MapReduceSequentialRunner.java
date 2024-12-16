@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+
 public class MapReduceSequentialRunner implements MapReduceRunner {
 
     public MapReduceSequentialRunner() {}
@@ -43,6 +46,8 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
         logger.jobReceived(jobId, jobId);
         logger.jobStart(jobId);
 
+        Logger LOGGER = LogManager.getLogger();
+
         int mappersCount = configuration.get(ConfigurationOption.MAPPERS_COUNT);
         int numberOfProcessedInputFiles = 0;
         for (int i = 0; i < mappersCount; ++i) {
@@ -55,7 +60,7 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             }
             try {
                 MapReduceTasksRunner.executeMapperTask(
-                        inputFilesToProcess, i, mappersOutputDirectory, configuration, job);
+                        inputFilesToProcess, i, mappersOutputDirectory, configuration, job, LOGGER);
             } catch (IOException e) {
                 throw new RuntimeException();
             }
@@ -70,7 +75,7 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             }
             try {
                 MapReduceTasksRunner.executeReduceTask(
-                        interFilesToReduce, i, outputDirectory, configuration, job);
+                        interFilesToReduce, i, outputDirectory, configuration, job, LOGGER);
             } catch (IOException e) {
                 throw new RuntimeException();
             }

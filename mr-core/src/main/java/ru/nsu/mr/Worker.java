@@ -1,11 +1,5 @@
 package ru.nsu.mr;
 
-import org.apache.log4j.ConsoleAppender;
-import org.apache.log4j.FileAppender;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.SimpleLayout;
-
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.WorkerEndpoint;
@@ -13,8 +7,20 @@ import ru.nsu.mr.endpoints.dto.*;
 import ru.nsu.mr.gateway.CoordinatorGateway;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.appender.ConsoleAppender;
+import org.apache.logging.log4j.core.appender.FileAppender;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 
 public class Worker {
 
@@ -80,10 +86,11 @@ public class Worker {
     private final Map<Integer, Task> previousTasks = new HashMap<>();
     private final WorkerEndpoint workerEndpoint;
 
+    private static Logger LOGGER = null;
+    private static LoggerContext context;
     private static final Object lock = new Object();
-
-    // Создаем логгер
-    private static final Logger LOG = Logger.getLogger(Worker.class);
+    private static boolean isConfigured = false;
+    private static ConfigurationBuilder<?> builder;
 
     public Worker(
             MapReduceJob<?, ?, ?, ?> job,
@@ -100,49 +107,87 @@ public class Worker {
         this.mappersOutputPath = mappersOutputDirectory;
         this.serverPort = serverPort;
 
-        initLogging(); // Инициализация логгирования
-
-        LOG.info("Initializing worker on port: " + serverPort);
-
         this.coordinatorGateway = new CoordinatorGateway(coordinatorPort);
+
+        configureLogging();
 
         workerEndpoint =
                 new WorkerEndpoint(this::createTask, this::getTaskDetails, this::getAllTasks);
         workerEndpoint.startServer(serverPort);
     }
 
-    private void initLogging() throws IOException {
-        String logsPath = configuration.get(ConfigurationOption.LOGS_PATH);
-        String logFileName = logsPath + "/worker" + serverPort + ".log";
+    private void configureLogging() throws IOException {
+        synchronized (lock) {
+            Path logPath = Path.of(configuration.get(ConfigurationOption.LOGS_PATH));
 
-        SimpleLayout layout = new SimpleLayout();
+            if (logPath.toString().isEmpty()) {
+                throw new IllegalArgumentException("Log path is not set in configuration.");
+            }
 
-        FileAppender fileAppender = new FileAppender(layout, logFileName, true);
-        ConsoleAppender consoleAppender = new ConsoleAppender(layout);
+            String logFileName = String.format("logs-worker-%s.log", this.serverPort);
+            Path logFile = logPath.resolve(logFileName);
 
-        Logger rootLogger = Logger.getRootLogger();
-        rootLogger.setLevel(Level.DEBUG);
-        rootLogger.addAppender(fileAppender);
-        rootLogger.addAppender(consoleAppender);
+            if (!isConfigured) {
+                builder = ConfigurationBuilderFactory.newConfigurationBuilder();
+                builder.setStatusLevel(Level.ERROR);
+                builder.setConfigurationName("WorkerLogConfig");
+
+                builder.add(builder.newRootLogger(Level.DEBUG));
+                isConfigured = true;
+
+                context = (LoggerContext) LogManager.getContext(false);
+                context.start(builder.build());
+            }
+
+            // Appender for a file
+            String appenderName = "FileAppender-" + this.serverPort;
+            Appender fileAppender = FileAppender.newBuilder()
+                    .setName(appenderName)
+                    .withFileName(logFile.toString())
+                    .setLayout(PatternLayout.newBuilder()
+                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                            .build())
+                    .build();
+            fileAppender.start();
+
+            context.getConfiguration().addAppender(fileAppender);
+            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+
+            // Appender for console
+            String consoleAppenderName = "ConsoleAppender";
+            Appender consoleAppender = ConsoleAppender.newBuilder()
+                    .setName(consoleAppenderName)
+                    .setLayout(PatternLayout.newBuilder()
+                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                            .build())
+                    .build();
+            consoleAppender.start();
+
+            context.getConfiguration().addAppender(consoleAppender);
+            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+
+            context.updateLoggers();
+            LOGGER = LogManager.getLogger("worker-" + this.serverPort);
+        }
     }
 
     private void registerWorkerWithCoordinator(String serverPort) throws IOException {
-        LOG.info("Registering worker with coordinator on port: " + serverPort);
         try {
+            LOGGER.debug("Registering worker on port: {}.", serverPort);
             coordinatorGateway.registerWorker(serverPort);
+            LOGGER.info("Worker {} successfully registered with coordinator.", serverPort);
         } catch (Exception e) {
-            LOG.error("Failed to register worker with coordinator: " + e.getMessage(), e);
+            LOGGER.error("Failed to register worker {} with coordinator: .", serverPort, e);
             throw new IOException(
                     "Failed to register worker with coordinator: " + e.getMessage(), e);
         }
     }
 
     public synchronized TaskDetails createTask(NewTaskDetails taskDetails) {
-        LOG.info("Received request to create task " + taskDetails.taskId()
-                + " of type " + taskDetails.taskType());
-
+        LOGGER.info("Creating task with ID: {}.", taskDetails.taskId());
         if (currentTask != null) {
-            LOG.warn("Worker is busy, cannot accept new task " + taskDetails.taskId());
+            LOGGER.warn("The worker is currently busy with another task. Task ID: {}.",
+                    taskDetails.taskId());
             throw new IllegalStateException("The worker is currently busy with another task.");
         }
 
@@ -152,21 +197,21 @@ public class Worker {
                         taskDetails.taskType(),
                         taskDetails.inputFiles().stream().map(Path::of).toList());
 
+        LOGGER.debug("On worker {} created task with id: {}, type: {}", serverPort,
+                taskDetails.taskId(), taskDetails.taskType());
+
         notify();
         return currentTask.getTaskDetails();
     }
 
     public synchronized TaskDetails getTaskDetails(int taskId) {
-        LOG.debug("Request for details of task: " + taskId);
         if (currentTask != null && currentTask.taskId == taskId) {
             return currentTask.getTaskDetails();
         }
-        Task previous = previousTasks.get(taskId);
-        return previous != null ? previous.getTaskDetails() : null;
+        return previousTasks.getOrDefault(taskId, null).getTaskDetails();
     }
 
     public synchronized List<TaskInfo> getAllTasks() {
-        LOG.debug("Request for all tasks info");
         List<TaskInfo> result =
                 new ArrayList<>(previousTasks.values().stream().map(Task::getTaskInfo).toList());
         if (currentTask != null) {
@@ -176,28 +221,22 @@ public class Worker {
     }
 
     public void start() throws IOException {
-        LOG.info("Starting worker main loop on port " + serverPort);
         registerWorkerWithCoordinator(serverPort);
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 waitForTask();
-                LOG.info("New task started: " + currentTask.taskId + " type: " + currentTask.taskType);
                 executeCurrentTask();
                 TaskDetails details = currentTask.getTaskDetails();
                 moveCurrentTaskToHistory();
                 notifyTaskEndToCoordinator(details);
-                LOG.info("Task finished: " + details.taskId() + " with status " + details.status());
             } catch (InterruptedException e) {
-                LOG.info("Worker interrupted, shutting down.");
                 Thread.currentThread().interrupt();
             }
         }
         workerEndpoint.stopServer();
-        LOG.info("Worker endpoint stopped.");
     }
 
     private synchronized void waitForTask() throws InterruptedException {
-        LOG.debug("Waiting for a new task...");
         while (currentTask == null) {
             wait();
         }
@@ -206,25 +245,28 @@ public class Worker {
     private void executeCurrentTask() {
         try {
             if (currentTask.taskType.equals(TaskType.MAP)) {
-                LOG.info("Executing MAP task " + currentTask.taskId);
+                LOGGER.info("Executing MAP task ID: {}.", currentTask.taskId);
                 MapReduceTasksRunner.executeMapperTask(
                         currentTask.inputFiles,
                         currentTask.taskId,
                         mappersOutputPath,
                         configuration,
-                        job);
+                        job,
+                        LOGGER);
             } else if (currentTask.taskType.equals(TaskType.REDUCE)) {
-                LOG.info("Executing REDUCE task " + currentTask.taskId);
+                LOGGER.info("Executing REDUCE task ID: {}.", currentTask.taskId);
                 MapReduceTasksRunner.executeReduceTask(
                         currentTask.inputFiles.stream().map(mappersOutputPath::resolve).toList(),
                         currentTask.taskId - configuration.get(ConfigurationOption.MAPPERS_COUNT),
                         outputDirectory,
                         configuration,
-                        job);
+                        job,
+                        LOGGER);
             }
+            LOGGER.info("Worker: {} finished executing task: {}", serverPort, currentTask.taskId);
             markTaskAsSucceeded();
         } catch (IOException e) {
-            LOG.error("Task " + currentTask.taskId + " failed: " + e.getMessage(), e);
+            LOGGER.error("Task ID: {} failed with exception.", currentTask.taskId, e);
             markTaskAsFailed(e);
         }
     }
@@ -240,14 +282,16 @@ public class Worker {
 
     private void notifyTaskEndToCoordinator(TaskDetails details) {
         try {
-            LOG.info("Notifying coordinator about the completion of task " + details.taskId());
             coordinatorGateway.notifyTask(details);
+            LOGGER.info("Notified coordinator about task completion for Task ID: {}.",
+                    details.taskId());
         } catch (IOException | InterruptedException e) {
-            LOG.error("Failed to notify coordinator about task " + details.taskId() + ": " + e.getMessage(), e);
+            LOGGER.error("Failed to notify task completion for Task ID: {}.",details.taskId(), e);
         }
     }
 
     private synchronized void moveCurrentTaskToHistory() {
+        LOGGER.info("Moving task ID: {} to history.", currentTask.taskId);
         previousTasks.put(currentTask.taskId, currentTask);
         currentTask = null;
     }

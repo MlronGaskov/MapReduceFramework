@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'maven-publish'
+    id("com.gradleup.shadow") version "9.0.0-beta4"
 }
 
 group = 'ru.nsu.mr'
@@ -21,7 +22,16 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     implementation 'org.yaml:snakeyaml:2.3'
 
-    implementation 'log4j:log4j:1.2.17'
+    implementation platform('org.apache.logging.log4j:log4j-bom:2.24.2')
+    implementation 'org.apache.logging.log4j:log4j-api:${log4j-api.version}'
+    implementation 'org.apache.logging.log4j:log4j-core'
+}
+
+shadowJar {
+    minimize()
+
+    // Исключаем конкретный файл
+    exclude '**/Log4j2Plugins.dat'
 }
 
 publishing {
@@ -29,6 +39,9 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
         }
+//        shadow(MavenPublication) {
+//            from(components.shadow)
+//        }
     }
     repositories {
         mavenLocal()
