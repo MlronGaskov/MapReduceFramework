@@ -11,19 +11,17 @@ repositories {
 }
 
 jar {
-    archiveBaseName.set("mr-core")
+    archiveBaseName.set("mr-api")
     archiveVersion.set(version)
 }
 
 dependencies {
-    implementation 'com.google.code.gson:gson:2.11.0'
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    implementation 'org.yaml:snakeyaml:2.3'
+}
 
-    implementation project(':mr-api')
-
-    implementation 'log4j:log4j:1.2.17'
+test {
+    useJUnitPlatform()
 }
 
 publishing {
@@ -35,8 +33,4 @@ publishing {
     repositories {
         mavenLocal()
     }
-}
-
-test {
-    useJUnitPlatform()
 }
