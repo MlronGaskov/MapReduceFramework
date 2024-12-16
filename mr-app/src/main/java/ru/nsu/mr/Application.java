@@ -9,8 +9,7 @@ public class Application {
             System.exit(1);
         }
         String[] additionalArgs = Arrays.copyOfRange(args, 1, args.length);
-
-        ConfigurationLoader loader = new ConfigurationLoader("C:/MapReduceFiles/mrShit/config.yml");
+        ConfigurationLoader loader = new ConfigurationLoader(args[0]);
         JarFileParser jarFileParser = new JarFileParser(loader.getJarPath());
         MapReduceJob<?, ?, ?, ?> job = jarFileParser.loadUsersSubClass(MapReduceJob.class);
         Launcher.launch(job, loader.getConfig(), loader.getMappersOutputPath(), loader.getReducersOutputPath(),
