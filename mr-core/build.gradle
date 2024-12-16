@@ -30,7 +30,6 @@ dependencies {
 shadowJar {
     minimize()
 
-    // Исключаем конкретный файл
     exclude '**/Log4j2Plugins.dat'
 }
 
@@ -39,9 +38,6 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
         }
-//        shadow(MavenPublication) {
-//            from(components.shadow)
-//        }
     }
     repositories {
         mavenLocal()
