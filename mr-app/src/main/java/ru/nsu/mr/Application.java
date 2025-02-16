@@ -12,7 +12,7 @@ public class Application {
         ConfigurationLoader loader = new ConfigurationLoader(args[0]);
         JarFileParser jarFileParser = new JarFileParser(loader.getJarPath());
         MapReduceJob<?, ?, ?, ?> job = jarFileParser.loadUsersSubClass(MapReduceJob.class);
-        Launcher.launch(job, loader.getConfig(), loader.getMappersOutputPath(), loader.getReducersOutputPath(),
-                loader.getInputFiles(), additionalArgs);
+        Launcher.launch(job, loader.getConfig(), loader.getInputFilesDirectory(), loader.getMappersOutputPath(),
+                loader.getReducersOutputPath(), loader.getStorageConnectionString(), additionalArgs);
     }
 }

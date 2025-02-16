@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Stream;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Logger;
@@ -21,6 +22,8 @@ import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
 import org.apache.logging.log4j.core.layout.PatternLayout;
+import ru.nsu.mr.storages.StorageProvider;
+import ru.nsu.mr.storages.StorageProviderFactory;
 
 public class Worker {
 
@@ -44,14 +47,24 @@ public class Worker {
 
         private final int taskId;
         private final TaskType taskType;
-        private final List<Path> inputFiles;
+        private final List<String> inputFiles;
         private TaskStatus status;
+        private final String storageConnectionString;
+        private final String targetDir;
 
-        public Task(int taskId, TaskType taskType, List<Path> inputFiles) {
+        public Task(
+                int taskId,
+                TaskType taskType,
+                List<String> inputFiles,
+                String storageConnectionString,
+                String targetDir
+        ) {
             this.taskId = taskId;
             this.taskType = taskType;
             this.inputFiles = inputFiles;
             this.status = TaskStatus.RUNNING;
+            this.storageConnectionString = storageConnectionString;
+            this.targetDir = targetDir.endsWith("/") ? targetDir : targetDir + "/";
         }
 
         public synchronized void setStatus(TaskStatus newStatus) {
@@ -62,7 +75,7 @@ public class Worker {
             return new TaskInfo(
                     taskId,
                     taskType,
-                    inputFiles.stream().map(Path::toString).toList(),
+                    inputFiles,
                     status.toString());
         }
 
@@ -70,15 +83,13 @@ public class Worker {
             return new TaskDetails(
                     taskId,
                     taskType,
-                    inputFiles.stream().map(Path::toString).toList(),
+                    inputFiles,
                     status.toString());
         }
     }
 
     private final MapReduceJob<?, ?, ?, ?> job;
     private final Configuration configuration;
-    private final Path outputDirectory;
-    private final Path mappersOutputPath;
     private final CoordinatorGateway coordinatorGateway;
     private final String serverPort;
 
@@ -90,21 +101,17 @@ public class Worker {
     private static LoggerContext context;
     private static final Object lock = new Object();
     private static boolean isConfigured = false;
-    private static ConfigurationBuilder<?> builder;
+
 
     public Worker(
             MapReduceJob<?, ?, ?, ?> job,
             Configuration configuration,
-            Path mappersOutputDirectory,
-            Path outputDirectory,
             String serverPort,
-            String coordinatorPort)
-            throws IOException {
+            String coordinatorPort
+    ) throws IOException {
 
         this.job = job;
         this.configuration = configuration;
-        this.outputDirectory = outputDirectory;
-        this.mappersOutputPath = mappersOutputDirectory;
         this.serverPort = serverPort;
 
         this.coordinatorGateway = new CoordinatorGateway(coordinatorPort);
@@ -116,7 +123,7 @@ public class Worker {
         workerEndpoint.startServer(serverPort);
     }
 
-    private void configureLogging() throws IOException {
+    private void configureLogging() {
         synchronized (lock) {
             Path logPath = Path.of(configuration.get(ConfigurationOption.LOGS_PATH));
 
@@ -128,7 +135,7 @@ public class Worker {
             Path logFile = logPath.resolve(logFileName);
 
             if (!isConfigured) {
-                builder = ConfigurationBuilderFactory.newConfigurationBuilder();
+                ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
                 builder.setStatusLevel(Level.ERROR);
                 builder.setConfigurationName("WorkerLogConfig");
 
@@ -139,7 +146,6 @@ public class Worker {
                 context.start(builder.build());
             }
 
-            // Appender for a file
             String appenderName = "FileAppender-" + this.serverPort;
             Appender fileAppender = FileAppender.newBuilder()
                     .setName(appenderName)
@@ -195,7 +201,9 @@ public class Worker {
                 new Task(
                         taskDetails.taskId(),
                         taskDetails.taskType(),
-                        taskDetails.inputFiles().stream().map(Path::of).toList());
+                        taskDetails.inputFiles(),
+                        taskDetails.storageConnectionString(),
+                        taskDetails.destinationDir());
 
         LOGGER.debug("On worker {} created task with id: {}, type: {}", serverPort,
                 taskDetails.taskId(), taskDetails.taskType());
@@ -243,31 +251,75 @@ public class Worker {
     }
 
     private void executeCurrentTask() {
+        Path tempDir = null;
         try {
+            tempDir = Files.createTempDirectory("worker_" + serverPort + "_task_" + currentTask.taskId);
             if (currentTask.taskType.equals(TaskType.MAP)) {
-                LOGGER.info("Executing MAP task ID: {}.", currentTask.taskId);
-                MapReduceTasksRunner.executeMapperTask(
-                        currentTask.inputFiles,
-                        currentTask.taskId,
-                        mappersOutputPath,
-                        configuration,
-                        job,
-                        LOGGER);
+                processMapTask(tempDir);
             } else if (currentTask.taskType.equals(TaskType.REDUCE)) {
-                LOGGER.info("Executing REDUCE task ID: {}.", currentTask.taskId);
-                MapReduceTasksRunner.executeReduceTask(
-                        currentTask.inputFiles.stream().map(mappersOutputPath::resolve).toList(),
-                        currentTask.taskId - configuration.get(ConfigurationOption.MAPPERS_COUNT),
-                        outputDirectory,
-                        configuration,
-                        job,
-                        LOGGER);
+                processReduceTask(tempDir);
             }
             LOGGER.info("Worker: {} finished executing task: {}", serverPort, currentTask.taskId);
             markTaskAsSucceeded();
         } catch (IOException e) {
             LOGGER.error("Task ID: {} failed with exception.", currentTask.taskId, e);
             markTaskAsFailed(e);
+        } finally {
+            if (tempDir != null) {
+                try {
+                    System.out.println(tempDir);
+                    deleteDirectory(tempDir);
+                } catch (IOException e) {
+                    LOGGER.warn("Failed to delete temporary directory: {}", tempDir, e);
+                }
+            }
+        }
+    }
+
+    private void processMapTask(Path tempDir) throws IOException {
+        try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(currentTask.storageConnectionString)) {
+            LOGGER.info("Executing MAP task ID: {}.", currentTask.taskId);
+            List<Path> localInputFiles = new ArrayList<>();
+            for (String fileKey : currentTask.inputFiles) {
+                Path localFile = tempDir.resolve(fileKey);
+                storageProvider.download(fileKey, localFile);
+                localInputFiles.add(localFile);
+            }
+            Path mapperOutputDir = tempDir.resolve("mapper_output");
+            Files.createDirectories(mapperOutputDir);
+            MapReduceTasksRunner.executeMapperTask(localInputFiles, currentTask.taskId, mapperOutputDir, configuration, job, LOGGER);
+            try (Stream<Path> filesStream = Files.list(mapperOutputDir)) {
+                filesStream.forEach(localOutputFile -> {
+                    String remoteFileName = localOutputFile.getFileName().toString();
+                    storageProvider.upload(localOutputFile, currentTask.targetDir + remoteFileName);
+                });
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void processReduceTask(Path tempDir) throws IOException {
+        try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(currentTask.storageConnectionString)) {
+            LOGGER.info("Executing REDUCE task ID: {}.", currentTask.taskId);
+            List<Path> localInputFiles = new ArrayList<>();
+            for (String fileKey : currentTask.inputFiles) {
+                Path localFile = tempDir.resolve(fileKey);
+                storageProvider.download(fileKey, localFile);
+                localInputFiles.add(localFile);
+            }
+            Path reduceOutputDir = tempDir.resolve("reduce_output");
+            Files.createDirectories(reduceOutputDir);
+            int reduceTaskIndex = currentTask.taskId - configuration.get(ConfigurationOption.MAPPERS_COUNT);
+            MapReduceTasksRunner.executeReduceTask(localInputFiles, reduceTaskIndex, reduceOutputDir, configuration, job, LOGGER);
+            try (Stream<Path> filesStream = Files.list(reduceOutputDir)) {
+                filesStream.forEach(localOutputFile -> {
+                    String remoteFileName = localOutputFile.getFileName().toString();
+                    storageProvider.upload(localOutputFile, currentTask.targetDir + remoteFileName);
+                });
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -294,5 +346,19 @@ public class Worker {
         LOGGER.info("Moving task ID: {} to history.", currentTask.taskId);
         previousTasks.put(currentTask.taskId, currentTask);
         currentTask = null;
+    }
+
+    private static void deleteDirectory(Path path) throws IOException {
+        if (Files.exists(path)) {
+            Files.walk(path)
+                    .sorted(Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+        }
     }
 }
