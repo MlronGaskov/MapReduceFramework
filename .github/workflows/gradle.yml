@@ -17,6 +17,13 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    environment: environment
+    env:
+      endpoint: ${{ secrets.ENDPOINT }}
+      accessKey: ${{ secrets.ACCESSKEY }}
+      secretKey: ${{ secrets.SECRETKEY }}
+      bucketName: ${{ secrets.BUCKETNAME }}
+      region: ${{ secrets.REGION }}
     permissions:
       contents: read
 

@@ -9,15 +9,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ConfigurationLoader {
-    private Configuration configuration = new Configuration();
-    private Path mapperOutputDirectory;
-    private Path outputDirectory;
-    private Path jarPath;
-    private List<Path> inputFiles = new ArrayList<>();
+    private final Configuration configuration = new Configuration();
+    private final String mapperOutputDirectory;
+    private final String outputDirectory;
+    private final Path jarPath;
+    private final String inputDirectory;
+    private final String storageConnectionString;
 
     private static class Config {
         public String jarPath;
@@ -26,6 +25,7 @@ public class ConfigurationLoader {
         public String outputDirectory;
         public String metricsPort;
         public String logsPath;
+        public String storageConnectionString;
         public Integer mappersCount;
         public Integer reducersCount;
         public Integer sorterInMemoryRecords;
@@ -46,8 +46,10 @@ public class ConfigurationLoader {
         }
 
         jarPath = Path.of(config.jarPath);
-        mapperOutputDirectory = Path.of(config.mapperOutputDirectory);
-        outputDirectory = Path.of(config.outputDirectory);
+        mapperOutputDirectory = config.mapperOutputDirectory;
+        this.storageConnectionString = config.storageConnectionString;
+        this.inputDirectory = config.inputDirectory;
+        outputDirectory = config.outputDirectory;
         configuration.set(ConfigurationOption.METRICS_PORT, config.metricsPort)
                 .set(ConfigurationOption.MAPPERS_COUNT, config.mappersCount)
                 .set(ConfigurationOption.REDUCERS_COUNT, config.reducersCount)
@@ -55,24 +57,17 @@ public class ConfigurationLoader {
         if (config.sorterInMemoryRecords != null) {
             configuration.set(ConfigurationOption.SORTER_IN_MEMORY_RECORDS, config.sorterInMemoryRecords);
         }
-        Path inputPath = Path.of(config.inputDirectory);
-        if (Files.isDirectory(inputPath)) {
-            Files.list(inputPath).forEach(inputFiles::add);
-        } else if (Files.isRegularFile(inputPath)) {
-            inputFiles.add(inputPath);
-        }
-
     }
 
     public Configuration getConfig() {
         return configuration;
     }
 
-    public Path getMappersOutputPath() {
+    public String getMappersOutputPath() {
         return mapperOutputDirectory;
     }
 
-    public Path getReducersOutputPath() {
+    public String getReducersOutputPath() {
         return outputDirectory;
     }
 
@@ -80,7 +75,11 @@ public class ConfigurationLoader {
         return jarPath;
     }
 
-    public List<Path> getInputFiles() {
-        return inputFiles;
+    public String getInputFilesDirectory() {
+        return inputDirectory;
+    }
+
+    public String getStorageConnectionString() {
+        return storageConnectionString;
     }
 }
