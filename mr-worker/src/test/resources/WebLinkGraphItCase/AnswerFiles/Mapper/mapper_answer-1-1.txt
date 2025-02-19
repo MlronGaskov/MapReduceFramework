@@ -1,0 +1,6 @@
+http://example.com/pageC http://example.com/pageE
+http://example.com/pageC http://example.com/pageF
+http://example.com/pageC http://example.com/pageH
+http://example.com/pageF http://example.com/pageH
+http://example.com/pageF http://example.com/pageB
+http://example.com/pageI http://example.com/pageJ

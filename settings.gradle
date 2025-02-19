@@ -3,4 +3,7 @@ include 'mr-core'
 include 'mr-examples'
 include 'mr-app'
 include 'mr-api'
+include 'mr-worker'
+include 'mr-coordinator'
+include 'mr-common'
 

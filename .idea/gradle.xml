@@ -10,8 +10,11 @@
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/mr-api" />
             <option value="$PROJECT_DIR$/mr-app" />
+            <option value="$PROJECT_DIR$/mr-common" />
+            <option value="$PROJECT_DIR$/mr-coordinator" />
             <option value="$PROJECT_DIR$/mr-core" />
             <option value="$PROJECT_DIR$/mr-examples" />
+            <option value="$PROJECT_DIR$/mr-worker" />
           </set>
         </option>
       </GradleProjectSettings>
