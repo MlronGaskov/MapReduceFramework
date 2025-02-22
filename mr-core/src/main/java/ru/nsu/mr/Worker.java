@@ -282,17 +282,17 @@ public class Worker {
             List<Path> localInputFiles = new ArrayList<>();
             for (String fileKey : currentTask.inputFiles) {
                 Path localFile = tempDir.resolve(fileKey);
-                storageProvider.download(fileKey, localFile);
+                storageProvider.get(fileKey, localFile);
                 localInputFiles.add(localFile);
             }
             Path mapperOutputDir = tempDir.resolve("mapper_output");
             Files.createDirectories(mapperOutputDir);
             MapReduceTasksRunner.executeMapperTask(localInputFiles, currentTask.taskId, mapperOutputDir, configuration, job, LOGGER);
             try (Stream<Path> filesStream = Files.list(mapperOutputDir)) {
-                filesStream.forEach(localOutputFile -> {
+                for (Path localOutputFile : filesStream.toList()) {
                     String remoteFileName = localOutputFile.getFileName().toString();
-                    storageProvider.upload(localOutputFile, currentTask.targetDir + remoteFileName);
-                });
+                    storageProvider.put(localOutputFile, currentTask.targetDir + remoteFileName);
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -305,7 +305,7 @@ public class Worker {
             List<Path> localInputFiles = new ArrayList<>();
             for (String fileKey : currentTask.inputFiles) {
                 Path localFile = tempDir.resolve(fileKey);
-                storageProvider.download(fileKey, localFile);
+                storageProvider.get(fileKey, localFile);
                 localInputFiles.add(localFile);
             }
             Path reduceOutputDir = tempDir.resolve("reduce_output");
@@ -313,10 +313,10 @@ public class Worker {
             int reduceTaskIndex = currentTask.taskId - configuration.get(ConfigurationOption.MAPPERS_COUNT);
             MapReduceTasksRunner.executeReduceTask(localInputFiles, reduceTaskIndex, reduceOutputDir, configuration, job, LOGGER);
             try (Stream<Path> filesStream = Files.list(reduceOutputDir)) {
-                filesStream.forEach(localOutputFile -> {
+                for (Path localOutputFile : filesStream.toList()) {
                     String remoteFileName = localOutputFile.getFileName().toString();
-                    storageProvider.upload(localOutputFile, currentTask.targetDir + remoteFileName);
-                });
+                    storageProvider.put(localOutputFile, currentTask.targetDir + remoteFileName);
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
