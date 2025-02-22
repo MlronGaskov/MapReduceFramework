@@ -11,49 +11,37 @@ import java.util.stream.Stream;
 public class LocalStorageProvider implements StorageProvider {
 
     @Override
-    public void download(String key, Path destination) {
+    public void get(String key, Path destination) throws IOException {
         Path source = Path.of(key);
-        try {
-            if (destination.getParent() != null) {
-                Files.createDirectories(destination.getParent());
-            }
-            Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to copy file: " + key, e);
+        if (destination.getParent() != null) {
+            Files.createDirectories(destination.getParent());
         }
+        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
     }
 
     @Override
-    public void upload(Path source, String key) {
+    public void put(Path source, String key) throws IOException {
         Path destination = Path.of(key);
-        try {
-            if (destination.getParent() != null) {
-                Files.createDirectories(destination.getParent());
-            }
-            Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to copy file: " + source, e);
+        if (destination.getParent() != null) {
+            Files.createDirectories(destination.getParent());
         }
+        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
     }
 
     @Override
-    public List<String> list(String key) {
+    public List<String> list(String key) throws IOException {
         Path directory = Path.of(key);
-        try {
-            if (!Files.exists(directory)) {
-                Files.createDirectories(directory);
-                return List.of();
-            } else if (!Files.isDirectory(directory)) {
-                throw new IllegalArgumentException("Provided key is not a directory: " + key);
-            }
-            try (Stream<Path> stream = Files.list(directory)) {
-                return stream
-                        .filter(Files::isRegularFile)
-                        .map(Path::toString)
-                        .collect(Collectors.toList());
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to list files in directory: " + key, e);
+        if (!Files.exists(directory)) {
+            Files.createDirectories(directory);
+            return List.of();
+        } else if (!Files.isDirectory(directory)) {
+            throw new IllegalArgumentException("Provided key is not a directory: " + key);
+        }
+        try (Stream<Path> stream = Files.list(directory)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(Path::toString)
+                    .collect(Collectors.toList());
         }
     }
 

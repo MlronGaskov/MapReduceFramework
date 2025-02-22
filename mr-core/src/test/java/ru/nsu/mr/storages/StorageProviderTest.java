@@ -3,6 +3,7 @@ package ru.nsu.mr.storages;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -41,15 +42,15 @@ class StorageProviderTest {
 
     @Test
     @Order(1)
-    void testLocalStorageUploadAndDownload() throws Exception {
+    void testLocalStoragePutAndGet() throws IOException {
         Path sourceFile = tempDir.resolve("test.txt");
         Files.writeString(sourceFile, "Hello, world!");
 
         String key = LOCAL_TEST_DIR + "/test.txt";
-        localStorage.upload(sourceFile, key);
+        localStorage.put(sourceFile, key);
 
         Path destinationFile = tempDir.resolve("downloaded.txt");
-        localStorage.download(key, destinationFile);
+        localStorage.get(key, destinationFile);
 
         assertTrue(Files.exists(destinationFile));
         assertEquals("Hello, world!", Files.readString(destinationFile));
@@ -57,7 +58,7 @@ class StorageProviderTest {
 
     @Test
     @Order(2)
-    void testLocalStorageList() {
+    void testLocalStorageList() throws IOException {
         List<String> files = localStorage.list(LOCAL_TEST_DIR);
 
         assertFalse(files.isEmpty());
@@ -66,15 +67,15 @@ class StorageProviderTest {
 
     @Test
     @Order(3)
-    void testS3UploadAndDownload() throws Exception {
+    void testS3PutAndGet() throws IOException {
         Path sourceFile = tempDir.resolve("s3_test.txt");
         Files.writeString(sourceFile, "S3 test file");
 
         String key = "s3_test.txt";
-        s3Storage.upload(sourceFile, key);
+        s3Storage.put(sourceFile, key);
 
         Path destinationFile = tempDir.resolve("s3_downloaded.txt");
-        s3Storage.download(key, destinationFile);
+        s3Storage.get(key, destinationFile);
 
         assertTrue(Files.exists(destinationFile));
         assertEquals("S3 test file", Files.readString(destinationFile));
@@ -82,7 +83,7 @@ class StorageProviderTest {
 
     @Test
     @Order(4)
-    void testS3List() {
+    void testS3List() throws IOException {
         String key = "";
         List<String> files = s3Storage.list(key);
 
@@ -93,15 +94,15 @@ class StorageProviderTest {
 
     @Test
     @Order(5)
-    void testLocalStorageUploadToNestedDirectoryAndDownload() throws Exception {
+    void testLocalStoragePutToNestedDirectoryAndGet() throws Exception {
         Path sourceFile = tempDir.resolve("nested_test.txt");
         Files.writeString(sourceFile, "Content in nested directory");
 
         String key = LOCAL_TEST_DIR + "/level1/level2/level3/nested_test.txt";
-        localStorage.upload(sourceFile, key);
+        localStorage.put(sourceFile, key);
 
         Path destinationFile = tempDir.resolve("nested_downloaded.txt");
-        localStorage.download(key, destinationFile);
+        localStorage.get(key, destinationFile);
 
         assertTrue(Files.exists(destinationFile));
         assertEquals("Content in nested directory", Files.readString(destinationFile));
@@ -109,15 +110,15 @@ class StorageProviderTest {
 
     @Test
     @Order(6)
-    void testS3UploadToNestedDirectoryAndDownload() throws Exception {
+    void testS3PutToNestedDirectoryAndGet() throws Exception {
         Path sourceFile = tempDir.resolve("s3_nested_test.txt");
         Files.writeString(sourceFile, "S3 content in nested directory");
 
         String key = "nested/level1/level2/s3_nested_test.txt";
-        s3Storage.upload(sourceFile, key);
+        s3Storage.put(sourceFile, key);
 
         Path destinationFile = tempDir.resolve("s3_nested_downloaded.txt");
-        s3Storage.download(key, destinationFile);
+        s3Storage.get(key, destinationFile);
 
         assertTrue(Files.exists(destinationFile));
         assertEquals("S3 content in nested directory", Files.readString(destinationFile));
@@ -129,17 +130,17 @@ class StorageProviderTest {
         Path sourceFile = tempDir.resolve("overwrite_test.txt");
         Files.writeString(sourceFile, "Original content");
         String key = LOCAL_TEST_DIR + "/overwrite_test.txt";
-        localStorage.upload(sourceFile, key);
+        localStorage.put(sourceFile, key);
 
         Path destinationFile = tempDir.resolve("overwrite_downloaded.txt");
-        localStorage.download(key, destinationFile);
+        localStorage.get(key, destinationFile);
         assertTrue(Files.exists(destinationFile));
         assertEquals("Original content", Files.readString(destinationFile));
 
         Files.writeString(sourceFile, "Updated content");
-        localStorage.upload(sourceFile, key);
+        localStorage.put(sourceFile, key);
 
-        localStorage.download(key, destinationFile);
+        localStorage.get(key, destinationFile);
         assertEquals("Updated content", Files.readString(destinationFile));
     }
 
@@ -149,17 +150,17 @@ class StorageProviderTest {
         Path sourceFile = tempDir.resolve("s3_overwrite_test.txt");
         Files.writeString(sourceFile, "S3 Original content");
         String key = "s3_overwrite_test.txt";
-        s3Storage.upload(sourceFile, key);
+        s3Storage.put(sourceFile, key);
 
         Path destinationFile = tempDir.resolve("s3_overwrite_downloaded.txt");
-        s3Storage.download(key, destinationFile);
+        s3Storage.get(key, destinationFile);
         assertTrue(Files.exists(destinationFile));
         assertEquals("S3 Original content", Files.readString(destinationFile));
 
         Files.writeString(sourceFile, "S3 Updated content");
-        s3Storage.upload(sourceFile, key);
+        s3Storage.put(sourceFile, key);
 
-        s3Storage.download(key, destinationFile);
+        s3Storage.get(key, destinationFile);
         assertEquals("S3 Updated content", Files.readString(destinationFile));
     }
 

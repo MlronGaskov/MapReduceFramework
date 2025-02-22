@@ -59,21 +59,12 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     @Override
-    public void download(String key, Path destination) {
+    public void get(String key, Path destination) throws IOException {
         Path parent = destination.getParent();
         if (parent != null) {
-            try {
-                Files.createDirectories(parent);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to create directories for destination: " + destination, e);
-            }
+            Files.createDirectories(parent);
         }
-
-        try {
-            Files.deleteIfExists(destination);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to delete existing file at destination: " + destination, e);
-        }
+        Files.deleteIfExists(destination);
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
@@ -84,7 +75,7 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     @Override
-    public void upload(Path source, String key) {
+    public void put(Path source, String key) {
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(key)
