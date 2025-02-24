@@ -2,7 +2,6 @@ package ru.nsu.mr;
 
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
-import ru.nsu.mr.endpoints.CoordinatorEndpoint;
 import ru.nsu.mr.endpoints.LoggerWithMetricsCalculation;
 import ru.nsu.mr.endpoints.MetricsService;
 
