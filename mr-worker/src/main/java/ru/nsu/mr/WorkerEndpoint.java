@@ -1,4 +1,4 @@
-package ru.nsu.mr.endpoints;
+package ru.nsu.mr;
 
 import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;

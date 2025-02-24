@@ -1,4 +1,4 @@
-package ru.nsu.mr.endpoints;
+package ru.nsu.mr;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -8,6 +8,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import ru.nsu.mr.endpoints.MetricsService;
 import ru.nsu.mr.endpoints.dto.JobDetails;
 import ru.nsu.mr.endpoints.dto.JobState;
 import ru.nsu.mr.endpoints.dto.JobSummary;

@@ -22,13 +22,6 @@ public class Launcher {
             } catch (IOException e) {
                 System.err.println("Failed to start Worker: " + e.getMessage());
             }
-        } else if ("coordinator".equalsIgnoreCase(role)) {
-            try {
-                Coordinator coordinator = new Coordinator(config, mappersOutputDirectory, reducersOutputDirectory);
-                coordinator.start(inputDirectory, storageConnectionString);
-            } catch (IOException | InterruptedException e) {
-                System.err.println("Failed to start Coordinator: " + e.getMessage());
-            }
         } else {
             System.err.println("Unknown role: " + role + ". Use 'worker' or 'coordinator'.");
         }

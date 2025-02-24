@@ -1,10 +1,11 @@
-package ru.nsu.mr.endpoints;
+package ru.nsu.mr;
 
 import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
+import ru.nsu.mr.endpoints.MetricsService;
 import ru.nsu.mr.endpoints.dto.JobDetails;
 import ru.nsu.mr.endpoints.dto.JobSummary;
 import ru.nsu.mr.endpoints.dto.TaskDetails;

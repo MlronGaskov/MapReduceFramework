@@ -15,6 +15,7 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     implementation project(':mr-core')
     implementation project(':mr-api')
+    implementation project(':mr-coordinator')
 }
 
 test {

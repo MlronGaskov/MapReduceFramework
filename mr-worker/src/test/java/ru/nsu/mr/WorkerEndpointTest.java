@@ -1,4 +1,4 @@
-package ru.nsu.mr.endpoints;
+package ru.nsu.mr;
 
 import static org.junit.jupiter.api.Assertions.*;
 

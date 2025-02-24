@@ -2,7 +2,6 @@ package ru.nsu.mr;
 
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
-import ru.nsu.mr.endpoints.WorkerEndpoint;
 import ru.nsu.mr.endpoints.dto.*;
 import ru.nsu.mr.gateway.CoordinatorGateway;
 
