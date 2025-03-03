@@ -11,7 +11,7 @@ public class ConfigurationOption<T> {
             new ConfigurationOption<>("runtime.reducer.count", 1);
 
     public static ConfigurationOption<Integer> SORTER_IN_MEMORY_RECORDS =
-            new ConfigurationOption<>("sorter.memory.n-records", 10000);
+            new ConfigurationOption<>("sorter.memory.n-records", 300000);
 
     public static ConfigurationOption<String> METRICS_PORT =
             new ConfigurationOption<>("endpoints.metrics.port", "");

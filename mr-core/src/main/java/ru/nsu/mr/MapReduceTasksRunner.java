@@ -96,8 +96,9 @@ public class MapReduceTasksRunner {
         }
         if (job.getPrecombineFunction() != null) {
             for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); i++) {
+                String mapperOutputFileID = mapperId + "-" + i;
                 Path mapperOutputFile = mappersOutputDirectory
-                        .resolve("before-combine-mapper-output-" + mapperId + "-" + i + ".txt");
+                        .resolve("before-combine-mapper-output-" + mapperOutputFileID + ".txt");
                 Iterator<Pair<K_I, V_I>> fileIterator = new KeyValueFileIterator<>(
                         mapperOutputFile,
                         job.getDeserializerInterKey(),
@@ -108,7 +109,7 @@ public class MapReduceTasksRunner {
                         job.getSerializerOutKey(),
                         job.getSerializerOutValue(),
                         Files.createFile(mappersOutputDirectory
-                                .resolve("mapper-output-" + mapperId + "-" + i + ".txt")));
+                                .resolve("mapper-output-" + mapperOutputFileID + ".txt")));
 
                      GroupedKeyValuesIterator<K_I, V_I> groupedIterator =
                              new GroupedKeyValuesIterator<>(
@@ -124,6 +125,8 @@ public class MapReduceTasksRunner {
                                             try {
                                                 mapperSink.put(outputKey, outputValue);
                                             } catch (IOException e) {
+                                                LOGGER.error("IO error while PRECOMBINE function on " +
+                                                                "mapper-output file {}.", mapperOutputFileID, e);
                                                 throw new RuntimeException(e);
                                             }
                                         }
@@ -154,6 +157,7 @@ public class MapReduceTasksRunner {
                             job.getDeserializerInterValue()));
         }
         Files.deleteIfExists(outputDirectory.resolve("output-" + reducerId + ".txt"));
+        LOGGER.debug("Reducer {} started REDUCE function.", reducerId);
         try (FileSink<K_O, V_O> fileSink =
                         new FileSink<>(
                                 job.getSerializerOutKey(),
@@ -165,7 +169,6 @@ public class MapReduceTasksRunner {
                                 new MergedKeyValueIterator<>(fileIterators, job.getComparator()))) {
             while (groupedIterator.hasNext()) {
                 Pair<K_I, Iterator<V_I>> currentGroup = groupedIterator.next();
-                LOGGER.debug("Reducer {} started REDUCE function.", reducerId);
                 job.getReducer()
                         .reduce(
                                 currentGroup.key(),
