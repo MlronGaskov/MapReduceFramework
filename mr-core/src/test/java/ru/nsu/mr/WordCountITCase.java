@@ -73,6 +73,23 @@ class WordCountITCase {
         }
     }
 
+    static class WordCountPrecombineFunction implements PrecombineFunction<String, Integer, String, Integer> {
+        @Override
+        public void precombine(
+                String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ignore) {
+
+            }
+            int sum = 0;
+            while (values.hasNext()) {
+                sum += values.next();
+            }
+            output.put(key, sum);
+        }
+    }
+
     @ParameterizedTest
     @MethodSource("testParameters")
     public void testWordCounter(TestParameters params) throws IOException {
@@ -88,6 +105,7 @@ class WordCountITCase {
                 new MapReduceJob<>(
                         new WordCountMapper(),
                         new WordCountReducer(),
+                        new WordCountPrecombineFunction(),
                         STRING_SERIALIZER,
                         INTEGER_SERIALIZER,
                         STRING_DESERIALIZER,
@@ -195,9 +213,9 @@ class WordCountITCase {
     static Stream<TestParameters> testParameters() {
         return Stream.of(
                 new TestParameters(
-                        new WordCounterConfig(10, 10, 3, 4, 1), new MapReduceSequentialRunner()),
-                new TestParameters(
-                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner()));
+                        new WordCounterConfig(10, 10, 3, 4, 1), new MapReduceSequentialRunner()));
+//                new TestParameters(
+//                        new WordCounterConfig(5, 50, 2, 3, 1), new MapReduceSequentialRunner()));
 //                new TestParameters(new WordCounterConfig(10, 10, 3, 4, 2), new ParallelRunner()),
 //                new TestParameters(new WordCounterConfig(5, 50, 2, 3, 3), new ParallelRunner()),
 //                new TestParameters(

@@ -5,6 +5,7 @@ import java.util.Comparator;
 public class MapReduceJob<K1, V1, K2, V2> {
     private final Mapper<String, String, K1, V1> mapper;
     private final Reducer<K1, V1, K2, V2> reducer;
+    private final PrecombineFunction<K1, V1, K2, V2> precombineFunction;
     private final Serializer<K1> serializerInterKey;
     private final Serializer<V1> serializerInterValue;
     private final Deserializer<K1> deserializerInterKey;
@@ -16,7 +17,7 @@ public class MapReduceJob<K1, V1, K2, V2> {
 
     public MapReduceJob(
             Mapper<String, String, K1, V1> mapper,
-            Reducer<K1, V1, K2, V2> reducer,
+            Reducer<K1, V1, K2, V2> reducer, PrecombineFunction<K1, V1, K2, V2> precombineFunction,
             Serializer<K1> serializerInterKey,
             Serializer<V1> serializerInterValue,
             Deserializer<K1> deserializerInterKey,
@@ -27,6 +28,7 @@ public class MapReduceJob<K1, V1, K2, V2> {
             KeyHasher<K1> hasher) {
         this.mapper = mapper;
         this.reducer = reducer;
+        this.precombineFunction = precombineFunction;
         this.serializerInterKey = serializerInterKey;
         this.serializerInterValue = serializerInterValue;
         this.deserializerInterKey = deserializerInterKey;
@@ -44,6 +46,8 @@ public class MapReduceJob<K1, V1, K2, V2> {
     public Reducer<K1, V1, K2, V2> getReducer() {
         return reducer;
     }
+
+    public PrecombineFunction<K1, V1, K2, V2> getPrecombineFunction() { return precombineFunction; }
 
     public Serializer<K1> getSerializerInterKey() {
         return serializerInterKey;

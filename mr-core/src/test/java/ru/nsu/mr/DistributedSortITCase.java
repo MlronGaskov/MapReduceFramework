@@ -80,6 +80,7 @@ class DistributedSortITCase {
                 new MapReduceJob<>(
                         new DistributedSortMapper(),
                         new DistributedSortReducer(),
+                        null,
                         STRING_SERIALIZER,
                         INTEGER_SERIALIZER,
                         STRING_DESERIALIZER,

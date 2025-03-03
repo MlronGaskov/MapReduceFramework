@@ -72,6 +72,7 @@ class InvertedIndexITCase {
                 new MapReduceJob<>(
                         new InvertedIndexMapper(),
                         new InvertedIndexReducer(),
+                        null,
                         STRING_SERIALIZER,
                         STRING_SERIALIZER,
                         STRING_DESERIALIZER,

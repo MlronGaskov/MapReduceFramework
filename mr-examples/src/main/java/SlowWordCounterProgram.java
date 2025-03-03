@@ -31,6 +31,7 @@ public class SlowWordCounterProgram {
                 new MapReduceJob<>(
                         new WordCountMapper(),
                         new WordCountReducer(),
+                        null,
                         STRING_SERIALIZER,
                         INTEGER_SERIALIZER,
                         STRING_DESERIALIZER,
