@@ -2,9 +2,6 @@ package ru.nsu.mr;
 
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
-import ru.nsu.mr.endpoints.CoordinatorEndpoint;
-import ru.nsu.mr.endpoints.LoggerWithMetricsCalculation;
-import ru.nsu.mr.endpoints.MetricsService;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -24,27 +21,6 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             Configuration configuration,
             Path mappersOutputDirectory,
             Path outputDirectory) {
-        JobLogger logger = new LoggerWithMetricsCalculation();
-        CoordinatorEndpoint endpoint = null;
-
-        if (!configuration.get(ConfigurationOption.METRICS_PORT).isEmpty()) {
-            try {
-                endpoint =
-                        new CoordinatorEndpoint(
-                                configuration.get(ConfigurationOption.METRICS_PORT),
-                                (MetricsService) logger,
-                                (e) -> {},
-                                (e) -> {});
-                endpoint.startServer();
-            } catch (IOException e) {
-                throw new RuntimeException();
-            }
-        }
-
-        String jobId = "1";
-
-        logger.jobReceived(jobId, jobId);
-        logger.jobStart(jobId);
 
         Logger LOGGER = LogManager.getLogger();
 
@@ -79,12 +55,6 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             } catch (IOException e) {
                 throw new RuntimeException();
             }
-        }
-
-        logger.jobFinish(jobId);
-
-        if (endpoint != null) {
-            endpoint.stopServer();
         }
     }
 }

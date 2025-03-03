@@ -10,7 +10,10 @@
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/mr-api" />
             <option value="$PROJECT_DIR$/mr-app" />
+            <option value="$PROJECT_DIR$/mr-app-v2" />
+            <option value="$PROJECT_DIR$/mr-appv2" />
             <option value="$PROJECT_DIR$/mr-core" />
+            <option value="$PROJECT_DIR$/mr-core-v2" />
             <option value="$PROJECT_DIR$/mr-examples" />
           </set>
         </option>

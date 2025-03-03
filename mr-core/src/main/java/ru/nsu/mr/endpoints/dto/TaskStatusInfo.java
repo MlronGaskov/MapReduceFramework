@@ -1,6 +1,7 @@
 package ru.nsu.mr.endpoints.dto;
 
-public record TaskDetails(
+public record TaskStatusInfo(
         int jobId,
-        TaskInformation taskInformation,
+        int taskId,
+        TaskType taskType,
         String status) {}
