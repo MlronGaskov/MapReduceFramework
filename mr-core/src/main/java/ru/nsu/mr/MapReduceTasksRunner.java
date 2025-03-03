@@ -41,8 +41,9 @@ public class MapReduceTasksRunner {
                             job.getDeserializerInterKey(),
                             job.getDeserializerInterValue(),
                             Files.createFile(
-                                    mappersOutputDirectory.resolve(
-                                            "mapper-output-" + mapperId + "-" + i + ".txt")),
+                                    mappersOutputDirectory.resolve(job.getPrecombineFunction() == null ?
+                                            "mapper-output-" + mapperId + "-" + i + ".txt" :
+                                            "before-combine-mapper-output-" + mapperId + "-" + i + ".txt")),
                             configuration.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS),
                             job.getComparator()));
         }
@@ -93,7 +94,48 @@ public class MapReduceTasksRunner {
                                 });
             }
         }
+        if (job.getPrecombineFunction() != null) {
+            for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); i++) {
+                Path mapperOutputFile = mappersOutputDirectory
+                        .resolve("before-combine-mapper-output-" + mapperId + "-" + i + ".txt");
+                Iterator<Pair<K_I, V_I>> fileIterator = new KeyValueFileIterator<>(
+                        mapperOutputFile,
+                        job.getDeserializerInterKey(),
+                        job.getDeserializerInterValue()
+                );
+
+                try (FileSink<K_O, V_O> mapperSink = new FileSink<>(
+                        job.getSerializerOutKey(),
+                        job.getSerializerOutValue(),
+                        Files.createFile(mappersOutputDirectory
+                                .resolve("mapper-output-" + mapperId + "-" + i + ".txt")));
+
+                     GroupedKeyValuesIterator<K_I, V_I> groupedIterator =
+                             new GroupedKeyValuesIterator<>(
+                                     new MergedKeyValueIterator<>(List.of(fileIterator), job.getComparator()))) {
+
+                    while (groupedIterator.hasNext()) {
+                        Pair<K_I, Iterator<V_I>> currentGroup = groupedIterator.next();
+                        job.getPrecombineFunction()
+                                .precombine(
+                                        currentGroup.key(),
+                                        currentGroup.value(),
+                                        (outputKey, outputValue) -> {
+                                            try {
+                                                mapperSink.put(outputKey, outputValue);
+                                            } catch (IOException e) {
+                                                throw new RuntimeException(e);
+                                            }
+                                        }
+                                );
+                    }
+                }
+
+                Files.deleteIfExists(mapperOutputFile);
+            }
+        }
     }
+
 
     public static <K_I, V_I, K_O, V_O> void executeReduceTask(
             List<Path> mappersOutputFiles,

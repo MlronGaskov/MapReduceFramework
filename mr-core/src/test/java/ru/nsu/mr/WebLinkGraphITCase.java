@@ -79,6 +79,7 @@ public class WebLinkGraphITCase {
                 new MapReduceJob<>(
                         new ReverseWebLinkMapper(),
                         new ReverseWebLinkReducer(),
+                        null,
                         x -> x,
                         x -> x,
                         x -> x,
