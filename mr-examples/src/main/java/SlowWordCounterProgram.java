@@ -43,8 +43,7 @@ public class SlowWordCounterProgram {
         Configuration config =
                 new Configuration()
                         .set(MAPPERS_COUNT, mappersCount)
-                        .set(REDUCERS_COUNT, reducersCount)
-                        .set(METRICS_PORT, "8080");
+                        .set(REDUCERS_COUNT, reducersCount);
 
         MapReduceRunner mr = new MapReduceSequentialRunner();
 

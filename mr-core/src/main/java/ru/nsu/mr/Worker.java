@@ -1,41 +1,40 @@
 package ru.nsu.mr;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.ConsoleAppender;
+import org.apache.logging.log4j.core.appender.FileAppender;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
-import ru.nsu.mr.endpoints.WorkerEndpoint;
 import ru.nsu.mr.endpoints.dto.*;
+import ru.nsu.mr.endpoints.WorkerEndpoint;
 import ru.nsu.mr.gateway.CoordinatorGateway;
+import ru.nsu.mr.storages.StorageProvider;
+import ru.nsu.mr.storages.StorageProviderFactory;
+import ru.nsu.mr.endpoints.WorkerEndpoint.TaskService;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Stream;
-
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.Appender;
-import org.apache.logging.log4j.core.appender.ConsoleAppender;
-import org.apache.logging.log4j.core.appender.FileAppender;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
-import org.apache.logging.log4j.core.layout.PatternLayout;
-import ru.nsu.mr.storages.StorageProvider;
-import ru.nsu.mr.storages.StorageProviderFactory;
+import java.util.stream.Collectors;
 
 public class Worker {
-
     private static final class Task {
-        public enum TaskStatus {
+        private enum TaskStatus {
             RUNNING,
             SUCCEED,
             FAILED;
 
             private Exception exception;
 
-            public void setException(Exception e) {
+            private void setException(Exception e) {
                 this.exception = e;
             }
 
@@ -45,203 +44,182 @@ public class Worker {
             }
         }
 
-        private final int taskId;
-        private final TaskType taskType;
-        private final List<String> inputFiles;
+        private final int jobId;
+        private final MapReduceJob<?, ?, ?, ?> job;
+        private final Configuration jobConfiguration;
+        private final TaskInformation taskInformation;
         private TaskStatus status;
-        private final String storageConnectionString;
-        private final String targetDir;
 
-        public Task(
-                int taskId,
-                TaskType taskType,
-                List<String> inputFiles,
-                String storageConnectionString,
-                String targetDir
-        ) {
-            this.taskId = taskId;
-            this.taskType = taskType;
-            this.inputFiles = inputFiles;
+        private Task(int jobId,
+                     MapReduceJob<?, ?, ?, ?> job,
+                     Configuration jobConfiguration,
+                     TaskInformation taskInformation) {
+            this.jobId = jobId;
+            this.job = job;
+            this.jobConfiguration = jobConfiguration;
+            this.taskInformation = taskInformation;
             this.status = TaskStatus.RUNNING;
-            this.storageConnectionString = storageConnectionString;
-            this.targetDir = targetDir.endsWith("/") ? targetDir : targetDir + "/";
         }
 
-        public synchronized void setStatus(TaskStatus newStatus) {
+        private synchronized void setStatus(TaskStatus newStatus) {
             this.status = newStatus;
         }
 
-        public synchronized TaskInfo getTaskInfo() {
-            return new TaskInfo(
-                    taskId,
-                    taskType,
-                    inputFiles,
-                    status.toString());
+        private synchronized TaskStatusInfo toTaskStatusInfo() {
+            int taskId = taskInformation.taskId();
+            TaskType type = taskInformation.taskType();
+            return new TaskStatusInfo(jobId, taskId, type, status.toString());
         }
 
-        public synchronized TaskDetails getTaskDetails() {
-            return new TaskDetails(
-                    taskId,
-                    taskType,
-                    inputFiles,
-                    status.toString());
+        private synchronized TaskDetails toTaskDetails() {
+            return new TaskDetails(jobId, taskInformation, status.toString());
         }
     }
 
-    private final MapReduceJob<?, ?, ?, ?> job;
-    private final Configuration configuration;
-    private final CoordinatorGateway coordinatorGateway;
-    private final String serverPort;
-
+    private volatile MapReduceJob<?, ?, ?, ?> pendingJob = null;
+    private volatile Configuration pendingJobConfig = null;
+    private final CoordinatorGateway coordinatorV2Gateway;
+    private final WorkerEndpoint workerEndpoint;
+    private final String workerBaseUrl;
     private volatile Task currentTask = null;
     private final Map<Integer, Task> previousTasks = new HashMap<>();
-    private final WorkerEndpoint workerEndpoint;
-
     private static Logger LOGGER = null;
-    private static LoggerContext context;
-    private static final Object lock = new Object();
-    private static boolean isConfigured = false;
+    private static LoggerContext loggerContext;
+    private static final Object logLock = new Object();
+    private static boolean loggingConfigured = false;
 
-
-    public Worker(
-            MapReduceJob<?, ?, ?, ?> job,
-            Configuration configuration,
-            String serverPort,
-            String coordinatorPort
-    ) throws IOException {
-
-        this.job = job;
-        this.configuration = configuration;
-        this.serverPort = serverPort;
-
-        this.coordinatorGateway = new CoordinatorGateway(coordinatorPort);
-
-        configureLogging();
-
-        workerEndpoint =
-                new WorkerEndpoint(this::createTask, this::getTaskDetails, this::getAllTasks);
-        workerEndpoint.startServer(serverPort);
+    public Worker(String coordinatorBaseUrl, String workerBaseUrl, String logsPath) throws IOException {
+        this.workerBaseUrl = workerBaseUrl;
+        this.coordinatorV2Gateway = !Objects.equals(coordinatorBaseUrl, "") ?
+                new CoordinatorGateway(coordinatorBaseUrl) : null;
+        TaskService taskService = new InMemoryTaskService();
+        this.workerEndpoint = new WorkerEndpoint(workerBaseUrl, taskService);
+        workerEndpoint.startServer();
+        configureLogging(logsPath);
     }
 
-    private void configureLogging() {
-        synchronized (lock) {
-            Path logPath = Path.of(configuration.get(ConfigurationOption.LOGS_PATH));
+    synchronized void setJob(MapReduceJob<?, ?, ?, ?> job, Configuration jobConfiguration) {
+        this.pendingJob = job;
+        this.pendingJobConfig = jobConfiguration;
+    }
 
-            if (logPath.toString().isEmpty()) {
+    public void start() {
+        registerWorkerWithCoordinator();
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                waitForTask();
+                executeCurrentTask();
+                TaskDetails details = currentTask.toTaskDetails();
+                moveCurrentTaskToHistory();
+                notifyTaskCompletion(details);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        workerEndpoint.stopServer();
+    }
+
+    synchronized public TaskDetails createTaskInternal(NewTaskDetails details) {
+        LOGGER.info("Creating task with ID: {}.", details.taskInformation().taskId());
+        if (currentTask != null) {
+            LOGGER.warn("Worker is busy. Cannot create task with ID: {}.", details.taskInformation().taskId());
+            throw new IllegalStateException("The worker is currently busy with another task.");
+        }
+        if (pendingJob == null || pendingJobConfig == null) {
+            JobInformation jobInfo = details.jobInformation();
+            try (StorageProvider jobStorage = StorageProviderFactory.getStorageProvider(jobInfo.storageConnectionString())) {
+                try (TemporaryDirectory tempDir = new TemporaryDirectory(jobStorage)) {
+                    Path jarFile = tempDir.get(List.of(jobInfo.userJobPath()), "jar").getFirst();
+                    JarFileParser jarParser = new JarFileParser(jarFile);
+                    pendingJob = jarParser.loadUsersSubClass(MapReduceJob.class);
+                    jarParser.close();
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load job from jar", e);
+            }
+            Configuration newConfig = new Configuration();
+            newConfig.set(ConfigurationOption.MAPPERS_COUNT, jobInfo.mappersCount());
+            newConfig.set(ConfigurationOption.REDUCERS_COUNT, jobInfo.reducersCount());
+            newConfig.set(ConfigurationOption.SORTER_IN_MEMORY_RECORDS, jobInfo.sorterInMemoryRecords());
+            pendingJobConfig = newConfig;
+        }
+        currentTask = new Task(details.jobInformation().jobId(), pendingJob, pendingJobConfig, details.taskInformation());
+        LOGGER.debug("Worker {} created task with id: {} and type: {}.", workerBaseUrl,
+                details.taskInformation().taskId(), details.taskInformation().taskType());
+        notify();
+        return currentTask.toTaskDetails();
+    }
+
+    synchronized public TaskDetails getTaskDetailsInternal(int taskId) {
+        if (currentTask != null && currentTask.taskInformation.taskId() == taskId) {
+            return currentTask.toTaskDetails();
+        }
+        Task task = previousTasks.get(taskId);
+        return task != null ? task.toTaskDetails() : null;
+    }
+
+    synchronized public List<TaskStatusInfo> getAllTasksInternal() {
+        List<TaskStatusInfo> result = previousTasks.values().stream()
+                .map(Task::toTaskStatusInfo)
+                .collect(Collectors.toList());
+        if (currentTask != null) {
+            result.add(currentTask.toTaskStatusInfo());
+        }
+        return result;
+    }
+
+    private void configureLogging(String logsPath) {
+        synchronized (logLock) {
+            Path logDir = Path.of(logsPath);
+            if (logDir.toString().isEmpty()) {
                 throw new IllegalArgumentException("Log path is not set in configuration.");
             }
-
-            String logFileName = String.format("logs-worker-%s.log", this.serverPort);
-            Path logFile = logPath.resolve(logFileName);
-
-            if (!isConfigured) {
+            String logFileName = String.format("logs-worker-%s.log", workerBaseUrl.replace("://", "_").replace(":", "_"));
+            Path logFile = logDir.resolve(logFileName);
+            if (!loggingConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
                 builder.setStatusLevel(Level.ERROR);
                 builder.setConfigurationName("WorkerLogConfig");
-
                 builder.add(builder.newRootLogger(Level.DEBUG));
-                isConfigured = true;
-
-                context = (LoggerContext) LogManager.getContext(false);
-                context.start(builder.build());
+                loggingConfigured = true;
+                loggerContext = (LoggerContext) LogManager.getContext(false);
+                loggerContext.start(builder.build());
             }
-
-            String appenderName = "FileAppender-" + this.serverPort;
             Appender fileAppender = FileAppender.newBuilder()
-                    .setName(appenderName)
+                    .setName("FileAppender-" + workerBaseUrl)
                     .withFileName(logFile.toString())
                     .setLayout(PatternLayout.newBuilder()
                             .withPattern("%d [%t] %-5level: %msg%n%throwable")
                             .build())
                     .build();
             fileAppender.start();
-
-            context.getConfiguration().addAppender(fileAppender);
-            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
-
-            // Appender for console
-            String consoleAppenderName = "ConsoleAppender";
+            loggerContext.getConfiguration().addAppender(fileAppender);
+            loggerContext.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
             Appender consoleAppender = ConsoleAppender.newBuilder()
-                    .setName(consoleAppenderName)
+                    .setName("ConsoleAppender")
                     .setLayout(PatternLayout.newBuilder()
                             .withPattern("%d [%t] %-5level: %msg%n%throwable")
                             .build())
                     .build();
             consoleAppender.start();
-
-            context.getConfiguration().addAppender(consoleAppender);
-            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
-
-            context.updateLoggers();
-            LOGGER = LogManager.getLogger("worker-" + this.serverPort);
+            loggerContext.getConfiguration().addAppender(consoleAppender);
+            loggerContext.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+            loggerContext.updateLoggers();
+            LOGGER = LogManager.getLogger("worker-" + workerBaseUrl);
         }
     }
 
-    private void registerWorkerWithCoordinator(String serverPort) throws IOException {
+    private void registerWorkerWithCoordinator() {
+        if (coordinatorV2Gateway == null) {
+            return;
+        }
         try {
-            LOGGER.debug("Registering worker on port: {}.", serverPort);
-            coordinatorGateway.registerWorker(serverPort);
-            LOGGER.info("Worker {} successfully registered with coordinator.", serverPort);
+            LOGGER.debug("Registering worker on base URL: {}.", workerBaseUrl);
+            coordinatorV2Gateway.registerWorker(workerBaseUrl);
+            LOGGER.info("Worker {} successfully registered with coordinator.", workerBaseUrl);
         } catch (Exception e) {
-            LOGGER.error("Failed to register worker {} with coordinator: .", serverPort, e);
-            throw new IOException(
-                    "Failed to register worker with coordinator: " + e.getMessage(), e);
+            LOGGER.error("Failed to register worker {} with coordinator.", workerBaseUrl, e);
         }
-    }
-
-    public synchronized TaskDetails createTask(NewTaskDetails taskDetails) {
-        LOGGER.info("Creating task with ID: {}.", taskDetails.taskId());
-        if (currentTask != null) {
-            LOGGER.warn("The worker is currently busy with another task. Task ID: {}.",
-                    taskDetails.taskId());
-            throw new IllegalStateException("The worker is currently busy with another task.");
-        }
-
-        currentTask =
-                new Task(
-                        taskDetails.taskId(),
-                        taskDetails.taskType(),
-                        taskDetails.inputFiles(),
-                        taskDetails.storageConnectionString(),
-                        taskDetails.destinationDir());
-
-        LOGGER.debug("On worker {} created task with id: {}, type: {}", serverPort,
-                taskDetails.taskId(), taskDetails.taskType());
-
-        notify();
-        return currentTask.getTaskDetails();
-    }
-
-    public synchronized TaskDetails getTaskDetails(int taskId) {
-        if (currentTask != null && currentTask.taskId == taskId) {
-            return currentTask.getTaskDetails();
-        }
-        return previousTasks.getOrDefault(taskId, null).getTaskDetails();
-    }
-
-    public synchronized List<TaskInfo> getAllTasks() {
-        List<TaskInfo> result =
-                new ArrayList<>(previousTasks.values().stream().map(Task::getTaskInfo).toList());
-        if (currentTask != null) {
-            result.add(currentTask.getTaskInfo());
-        }
-        return result;
-    }
-
-    public void start() throws IOException {
-        registerWorkerWithCoordinator(serverPort);
-        while (!Thread.currentThread().isInterrupted()) {
-            try {
-                waitForTask();
-                executeCurrentTask();
-                TaskDetails details = currentTask.getTaskDetails();
-                moveCurrentTaskToHistory();
-                notifyTaskEndToCoordinator(details);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        workerEndpoint.stopServer();
     }
 
     private synchronized void waitForTask() throws InterruptedException {
@@ -251,114 +229,75 @@ public class Worker {
     }
 
     private void executeCurrentTask() {
-        Path tempDir = null;
-        try {
-            tempDir = Files.createTempDirectory("worker_" + serverPort + "_task_" + currentTask.taskId);
-            if (currentTask.taskType.equals(TaskType.MAP)) {
-                processMapTask(tempDir);
-            } else if (currentTask.taskType.equals(TaskType.REDUCE)) {
-                processReduceTask(tempDir);
-            }
-            LOGGER.info("Worker: {} finished executing task: {}", serverPort, currentTask.taskId);
-            markTaskAsSucceeded();
-        } catch (IOException e) {
-            LOGGER.error("Task ID: {} failed with exception.", currentTask.taskId, e);
-            markTaskAsFailed(e);
-        } finally {
-            if (tempDir != null) {
-                try {
-                    System.out.println(tempDir);
-                    deleteDirectory(tempDir);
-                } catch (IOException e) {
-                    LOGGER.warn("Failed to delete temporary directory: {}", tempDir, e);
+        try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(
+                currentTask.taskInformation.storageConnectionString())) {
+            try (TemporaryDirectory tempDir = new TemporaryDirectory(storageProvider)) {
+                List<Path> localInputFiles = tempDir.get(currentTask.taskInformation.inputFiles(), "input");
+                Path outputDir = tempDir.getPath().resolve("output");
+                Files.createDirectories(outputDir);
+                if (currentTask.taskInformation.taskType().equals(TaskType.MAP)) {
+                    MapReduceTasksRunner.executeMapperTask(
+                            localInputFiles,
+                            currentTask.taskInformation.taskId(),
+                            outputDir,
+                            currentTask.jobConfiguration,
+                            currentTask.job,
+                            LOGGER);
+                } else if (currentTask.taskInformation.taskType().equals(TaskType.REDUCE)) {
+                    MapReduceTasksRunner.executeReduceTask(
+                            localInputFiles,
+                            currentTask.taskInformation.taskId() - currentTask.jobConfiguration.get(ConfigurationOption.MAPPERS_COUNT),
+                            outputDir,
+                            currentTask.jobConfiguration,
+                            currentTask.job,
+                            LOGGER);
                 }
-            }
-        }
-    }
-
-    private void processMapTask(Path tempDir) throws IOException {
-        try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(currentTask.storageConnectionString)) {
-            LOGGER.info("Executing MAP task ID: {}.", currentTask.taskId);
-            List<Path> localInputFiles = new ArrayList<>();
-            for (String fileKey : currentTask.inputFiles) {
-                Path localFile = tempDir.resolve(fileKey);
-                storageProvider.get(fileKey, localFile);
-                localInputFiles.add(localFile);
-            }
-            Path mapperOutputDir = tempDir.resolve("mapper_output");
-            Files.createDirectories(mapperOutputDir);
-            MapReduceTasksRunner.executeMapperTask(localInputFiles, currentTask.taskId, mapperOutputDir, configuration, job, LOGGER);
-            try (Stream<Path> filesStream = Files.list(mapperOutputDir)) {
-                for (Path localOutputFile : filesStream.toList()) {
-                    String remoteFileName = localOutputFile.getFileName().toString();
-                    storageProvider.put(localOutputFile, currentTask.targetDir + remoteFileName);
-                }
+                tempDir.put(outputDir, currentTask.taskInformation.targetDir());
+                LOGGER.info("Worker {} finished executing task: {}.",
+                        workerBaseUrl, currentTask.taskInformation.taskId());
+                currentTask.setStatus(Task.TaskStatus.SUCCEED);
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            LOGGER.error("Task ID: {} failed with exception.", currentTask.taskInformation.taskId(), e);
+            currentTask.setStatus(Task.TaskStatus.FAILED);
+            currentTask.status.setException(e);
         }
     }
 
-    private void processReduceTask(Path tempDir) throws IOException {
-        try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(currentTask.storageConnectionString)) {
-            LOGGER.info("Executing REDUCE task ID: {}.", currentTask.taskId);
-            List<Path> localInputFiles = new ArrayList<>();
-            for (String fileKey : currentTask.inputFiles) {
-                Path localFile = tempDir.resolve(fileKey);
-                storageProvider.get(fileKey, localFile);
-                localInputFiles.add(localFile);
-            }
-            Path reduceOutputDir = tempDir.resolve("reduce_output");
-            Files.createDirectories(reduceOutputDir);
-            int reduceTaskIndex = currentTask.taskId - configuration.get(ConfigurationOption.MAPPERS_COUNT);
-            MapReduceTasksRunner.executeReduceTask(localInputFiles, reduceTaskIndex, reduceOutputDir, configuration, job, LOGGER);
-            try (Stream<Path> filesStream = Files.list(reduceOutputDir)) {
-                for (Path localOutputFile : filesStream.toList()) {
-                    String remoteFileName = localOutputFile.getFileName().toString();
-                    storageProvider.put(localOutputFile, currentTask.targetDir + remoteFileName);
-                }
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+    private void notifyTaskCompletion(TaskDetails details) {
+        if (coordinatorV2Gateway == null) {
+            return;
         }
-    }
-
-    private synchronized void markTaskAsSucceeded() {
-        currentTask.setStatus(Task.TaskStatus.SUCCEED);
-    }
-
-    private synchronized void markTaskAsFailed(Exception e) {
-        currentTask.setStatus(Task.TaskStatus.FAILED);
-        currentTask.status.setException(e);
-    }
-
-    private void notifyTaskEndToCoordinator(TaskDetails details) {
         try {
-            coordinatorGateway.notifyTask(details);
-            LOGGER.info("Notified coordinator about task completion for Task ID: {}.",
-                    details.taskId());
+            coordinatorV2Gateway.notifyTask(details);
+            LOGGER.info("Notified coordinator about task completion for Task ID: {}.", details.taskInformation().taskId());
         } catch (IOException | InterruptedException e) {
-            LOGGER.error("Failed to notify task completion for Task ID: {}.",details.taskId(), e);
+            LOGGER.error("Failed to notify task completion for Task ID: {}.", details.taskInformation().taskId(), e);
         }
     }
 
     private synchronized void moveCurrentTaskToHistory() {
-        LOGGER.info("Moving task ID: {} to history.", currentTask.taskId);
-        previousTasks.put(currentTask.taskId, currentTask);
+        int taskId = currentTask.taskInformation.taskId();
+        LOGGER.info("Moving task ID: {} to history.", taskId);
+        previousTasks.put(taskId, currentTask);
         currentTask = null;
     }
 
-    private static void deleteDirectory(Path path) throws IOException {
-        if (Files.exists(path)) {
-            Files.walk(path)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(p -> {
-                        try {
-                            Files.delete(p);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
+    // Внутренний сервис задач
+    private class InMemoryTaskService implements TaskService {
+        @Override
+        public TaskDetails getTaskDetails(int taskId) {
+            return getTaskDetailsInternal(taskId);
+        }
+
+        @Override
+        public List<TaskStatusInfo> getAllTasks() {
+            return getAllTasksInternal();
+        }
+
+        @Override
+        public TaskDetails createTask(NewTaskDetails details) {
+            return createTaskInternal(details);
         }
     }
 }

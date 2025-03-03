@@ -1,32 +1,46 @@
 package ru.nsu.mr.gateway;
 
-import com.google.gson.Gson;
-
 import ru.nsu.mr.endpoints.dto.NewTaskDetails;
 import ru.nsu.mr.endpoints.dto.TaskDetails;
+import ru.nsu.mr.endpoints.dto.TaskStatusInfo;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
+import java.util.Arrays;
+import java.util.List;
 
 public class WorkerGateway {
     private final String workerBaseUrl;
     private final HttpClient httpClient;
-    private final Gson gson;
 
-    public WorkerGateway(String port) {
-        this.workerBaseUrl = "http://localhost:" + port + "/tasks";
+    public WorkerGateway(String workerBaseUrl) {
+        this.workerBaseUrl = workerBaseUrl;
         this.httpClient = HttpClient.newHttpClient();
-        this.gson = new Gson();
     }
 
-    public TaskDetails createTask(NewTaskDetails newTaskDetails)
-            throws InterruptedException, IOException {
+    public TaskDetails createTask(NewTaskDetails newTaskDetails) throws InterruptedException, IOException {
         return HttpUtils.sendPutRequest(
                 httpClient,
-                gson,
-                workerBaseUrl,
+                workerBaseUrl  + "/tasks",
                 newTaskDetails,
                 TaskDetails.class,
                 "Failed to create task");
+    }
+
+    public TaskDetails getTaskDetails(int taskId) throws IOException, InterruptedException {
+        return HttpUtils.sendGetRequest(
+                httpClient,
+                workerBaseUrl + "/tasks/" + taskId,
+                TaskDetails.class,
+                "Failed to get task details");
+    }
+
+    public List<TaskStatusInfo> getAllTasks() throws IOException, InterruptedException {
+        TaskStatusInfo[] tasks = HttpUtils.sendGetRequest(
+                httpClient,
+                workerBaseUrl + "/tasks",
+                TaskStatusInfo[].class,
+                "Failed to get all tasks");
+        return Arrays.asList(tasks);
     }
 }

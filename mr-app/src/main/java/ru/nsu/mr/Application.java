@@ -1,18 +1,38 @@
 package ru.nsu.mr;
 
-import java.util.Arrays;
-
 public class Application {
-    public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("Usage: java -jar Application.jar <path-to-config> <additional-args>");
+    public static void main(String[] args) {
+        if (args.length < 1) {
+            System.err.println("Usage: java -jar app.jar [coordinator|worker] ...");
             System.exit(1);
         }
-        String[] additionalArgs = Arrays.copyOfRange(args, 1, args.length);
-        ConfigurationLoader loader = new ConfigurationLoader(args[0]);
-        JarFileParser jarFileParser = new JarFileParser(loader.getJarPath());
-        MapReduceJob<?, ?, ?, ?> job = jarFileParser.loadUsersSubClass(MapReduceJob.class);
-        Launcher.launch(job, loader.getConfig(), loader.getInputFilesDirectory(), loader.getMappersOutputPath(),
-                loader.getReducersOutputPath(), loader.getStorageConnectionString(), additionalArgs);
+        String mode = args[0];
+        try {
+            if ("coordinator".equalsIgnoreCase(mode)) {
+                if (args.length != 3) {
+                    System.err.println("Usage: java -jar app.jar coordinator <config.yaml> <coordinatorBaseUrl>");
+                    System.exit(1);
+                }
+                String configFile = args[1];
+                String coordinatorBaseUrl = args[2];
+                Coordinator coordinator = new Coordinator(coordinatorBaseUrl);
+                coordinator.setJobConfiguration(configFile);
+                coordinator.start();
+            } else if ("worker".equalsIgnoreCase(mode)) {
+                if (args.length != 3) {
+                    System.err.println("Usage: java -jar app.jar worker <coordinatorBaseUrl> <workerBaseUrl>");
+                    System.exit(1);
+                }
+                String coordinatorBaseUrl = args[1];
+                String workerBaseUrl = args[2];
+                Worker worker = new Worker(coordinatorBaseUrl, workerBaseUrl, "./logs");
+                worker.start();
+            } else {
+                System.err.println("Unknown mode: " + mode);
+                System.exit(1);
+            }
+        } catch (Exception e) {
+            System.exit(1);
+        }
     }
 }

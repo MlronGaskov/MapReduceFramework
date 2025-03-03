@@ -33,7 +33,6 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     private S3Client connectS3Client(Map<String, String> configMap) {
-        System.out.println(configMap);
         return S3Client.builder()
                 .region(Region.of(configMap.get("region")))
                 .endpointOverride(URI.create(configMap.get("endpoint")))

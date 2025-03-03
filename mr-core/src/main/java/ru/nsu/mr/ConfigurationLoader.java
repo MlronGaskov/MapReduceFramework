@@ -12,74 +12,42 @@ import java.nio.file.Path;
 
 public class ConfigurationLoader {
     private final Configuration configuration = new Configuration();
-    private final String mapperOutputDirectory;
-    private final String outputDirectory;
-    private final Path jarPath;
-    private final String inputDirectory;
-    private final String storageConnectionString;
 
     private static class Config {
-        public String jarPath;
-        public String inputDirectory;
-        public String mapperOutputDirectory;
-        public String outputDirectory;
-        public String metricsPort;
-        public String logsPath;
-        public String storageConnectionString;
+        public Integer jobId;
+        public String jobPath;
+        public String jobStorageConnectionString;
+        public String inputsPath;
+        public String mappersOutputsPath;
+        public String reducersOutputsPath;
+        public String dataStorageConnectionString;
         public Integer mappersCount;
         public Integer reducersCount;
         public Integer sorterInMemoryRecords;
     }
 
     public ConfigurationLoader(String filePath) throws IOException {
-
-        // Создаем экземпляр LoaderOptions
         LoaderOptions options = new LoaderOptions();
-
-        // Создаем экземпляр Yaml с LoaderOptions
         Yaml yaml = new Yaml(options);
-
 
         Config config;
         try (InputStream inputStream = Files.newInputStream(Path.of(filePath))) {
             config = yaml.loadAs(inputStream, Config.class);
         }
 
-        jarPath = Path.of(config.jarPath);
-        mapperOutputDirectory = config.mapperOutputDirectory;
-        this.storageConnectionString = config.storageConnectionString;
-        this.inputDirectory = config.inputDirectory;
-        outputDirectory = config.outputDirectory;
-        configuration.set(ConfigurationOption.METRICS_PORT, config.metricsPort)
+        configuration.set(ConfigurationOption.JOB_ID, config.jobId)
+                .set(ConfigurationOption.JOB_PATH, config.jobPath)
+                .set(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING, config.jobStorageConnectionString)
+                .set(ConfigurationOption.INPUTS_PATH, config.inputsPath)
+                .set(ConfigurationOption.MAPPERS_OUTPUTS_PATH, config.mappersOutputsPath)
+                .set(ConfigurationOption.REDUCERS_OUTPUTS_PATH, config.reducersOutputsPath)
+                .set(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING, config.dataStorageConnectionString)
                 .set(ConfigurationOption.MAPPERS_COUNT, config.mappersCount)
                 .set(ConfigurationOption.REDUCERS_COUNT, config.reducersCount)
-                .set(ConfigurationOption.LOGS_PATH, config.logsPath);
-        if (config.sorterInMemoryRecords != null) {
-            configuration.set(ConfigurationOption.SORTER_IN_MEMORY_RECORDS, config.sorterInMemoryRecords);
-        }
+                .set(ConfigurationOption.SORTER_IN_MEMORY_RECORDS, config.sorterInMemoryRecords);
     }
 
     public Configuration getConfig() {
         return configuration;
-    }
-
-    public String getMappersOutputPath() {
-        return mapperOutputDirectory;
-    }
-
-    public String getReducersOutputPath() {
-        return outputDirectory;
-    }
-
-    public Path getJarPath() {
-        return jarPath;
-    }
-
-    public String getInputFilesDirectory() {
-        return inputDirectory;
-    }
-
-    public String getStorageConnectionString() {
-        return storageConnectionString;
     }
 }
