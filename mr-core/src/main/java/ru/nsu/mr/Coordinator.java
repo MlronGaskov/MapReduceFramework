@@ -99,6 +99,12 @@ public class Coordinator {
         if (jobConfig == null) {
             throw new IllegalStateException("Job configuration not set.");
         }
+
+        LOGGER.info("Starting job with configuration: JOB_PATH={}, MAPPERS_COUNT={}, REDUCERS_COUNT={}",
+                jobConfig.get(ConfigurationOption.JOB_PATH),
+                jobConfig.get(ConfigurationOption.MAPPERS_COUNT),
+                jobConfig.get(ConfigurationOption.REDUCERS_COUNT));
+
         String jobPath = jobConfig.get(ConfigurationOption.JOB_PATH);
         String jobStorageConnectionString = jobConfig.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING);
         String dataStorageConnectionString = jobConfig.get(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING);
@@ -119,6 +125,7 @@ public class Coordinator {
         try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(dataStorageConnectionString)) {
             List<String> inputFiles = storageProvider.list(inputsPath);
             int totalInputs = inputFiles.size();
+            LOGGER.info("Found {} input files in {}", inputFiles.size(), inputsPath);
             int processed = 0;
             for (int i = 0; i < mappersCount; i++) {
                 int count = (totalInputs - processed) / (mappersCount - i);
@@ -134,10 +141,12 @@ public class Coordinator {
                         mappersOutputsPath,
                         dataStorageConnectionString
                 );
+                LOGGER.info("Created MAP task {} with {} files", i, filesForTask.size());
                 NewTaskDetails newTask = new NewTaskDetails(jobInformation, taskInfo);
                 mapTaskQueue.add(newTask);
             }
         } catch (Exception e) {
+            LOGGER.error("Error while creating MAP tasks: {}", e.getMessage());
             throw new RuntimeException(e);
         }
         for (int i = 0; i < reducersCount; i++) {
@@ -154,6 +163,7 @@ public class Coordinator {
             );
             NewTaskDetails newTask = new NewTaskDetails(jobInformation, taskInfo);
             reduceTaskQueue.add(newTask);
+            LOGGER.info("Created REDUCE task {} with {} input files", mappersCount + i, reduceInputs.size());
         }
         waitForJobEnd();
         Thread.sleep(1000);
