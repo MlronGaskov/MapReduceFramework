@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  coordinator:
+    build: .
+    container_name: coordinator
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    ports:
+      - "8080:8080"
+    command: >
+      java -jar mr-app-1.0.jar coordinator /app/config.yaml http://coordinator:8080
+    networks:
+      - mrnet
+
+  worker:
+    build: .
+    depends_on:
+      - coordinator
+    command: >
+      sh -c "sleep 3 && java -jar mr-app-1.0.jar worker http://coordinator:8080 http://$(hostname):8090"
+    networks:
+      - mrnet
+
+networks:
+  mrnet:
+    driver: bridge
+
