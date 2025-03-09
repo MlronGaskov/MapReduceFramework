@@ -3,7 +3,3 @@ include 'mr-core'
 include 'mr-examples'
 include 'mr-app'
 include 'mr-api'
-include 'mr-core-v2'
-include 'mr-appv2'
-include 'mr-app-v2'
-

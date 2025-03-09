@@ -174,8 +174,14 @@ public class Worker {
             if (logDir.toString().isEmpty()) {
                 throw new IllegalArgumentException("Log path is not set in configuration.");
             }
-            String logFileName = String.format("logs-worker-%s.log", workerBaseUrl.replace("://", "_").replace(":", "_"));
+
+            String sanitizedWorkerId = workerBaseUrl
+                    .replaceAll("https?://", "")
+                    .replaceAll("[^a-zA-Z0-9.-]", "_");
+
+            String logFileName = String.format("logs-worker-%s.log", sanitizedWorkerId);
             Path logFile = logDir.resolve(logFileName);
+
             if (!loggingConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
                 builder.setStatusLevel(Level.ERROR);
@@ -185,8 +191,9 @@ public class Worker {
                 loggerContext = (LoggerContext) LogManager.getContext(false);
                 loggerContext.start(builder.build());
             }
+
             Appender fileAppender = FileAppender.newBuilder()
-                    .setName("FileAppender-" + workerBaseUrl)
+                    .setName("FileAppender-" + sanitizedWorkerId)
                     .withFileName(logFile.toString())
                     .setLayout(PatternLayout.newBuilder()
                             .withPattern("%d [%t] %-5level: %msg%n%throwable")
@@ -195,6 +202,7 @@ public class Worker {
             fileAppender.start();
             loggerContext.getConfiguration().addAppender(fileAppender);
             loggerContext.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+
             Appender consoleAppender = ConsoleAppender.newBuilder()
                     .setName("ConsoleAppender")
                     .setLayout(PatternLayout.newBuilder()
@@ -204,10 +212,12 @@ public class Worker {
             consoleAppender.start();
             loggerContext.getConfiguration().addAppender(consoleAppender);
             loggerContext.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+
             loggerContext.updateLoggers();
-            LOGGER = LogManager.getLogger("worker-" + workerBaseUrl);
+            LOGGER = LogManager.getLogger("worker-" + sanitizedWorkerId);
         }
     }
+
 
     private void registerWorkerWithCoordinator() {
         if (coordinatorV2Gateway == null) {
@@ -283,7 +293,6 @@ public class Worker {
         currentTask = null;
     }
 
-    // Внутренний сервис задач
     private class InMemoryTaskService implements TaskService {
         @Override
         public TaskDetails getTaskDetails(int taskId) {
