@@ -213,13 +213,25 @@ public class Worker {
         if (coordinatorV2Gateway == null) {
             return;
         }
-        try {
-            LOGGER.debug("Registering worker on base URL: {}.", workerBaseUrl);
-            coordinatorV2Gateway.registerWorker(workerBaseUrl);
-            LOGGER.info("Worker {} successfully registered with coordinator.", workerBaseUrl);
-        } catch (Exception e) {
-            LOGGER.error("Failed to register worker {} with coordinator.", workerBaseUrl, e);
+        LOGGER.debug("Registering worker on base URL: {}.", workerBaseUrl);
+        int attempts = 5;
+        for (int i = 1; i <= attempts; i++) {
+            try {
+                coordinatorV2Gateway.registerWorker(workerBaseUrl);
+                LOGGER.info("Worker {} successfully registered with coordinator.", workerBaseUrl);
+                return;
+            } catch (Exception e) {
+                LOGGER.warn("Attempt {}/{}: Failed to register worker {} with coordinator: {}",
+                        i, attempts, workerBaseUrl, e.getMessage());
+                try {
+                    Thread.sleep(2000L);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
         }
+        LOGGER.error("All attempts to register worker {} have failed.", workerBaseUrl);
     }
 
     private synchronized void waitForTask() throws InterruptedException {

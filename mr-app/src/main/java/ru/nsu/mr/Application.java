@@ -15,8 +15,10 @@ public class Application {
                 }
                 String configFile = args[1];
                 String coordinatorBaseUrl = args[2];
+
                 Coordinator coordinator = new Coordinator(coordinatorBaseUrl);
                 coordinator.setJobConfiguration(configFile);
+
                 coordinator.start();
             } else if ("worker".equalsIgnoreCase(mode)) {
                 if (args.length != 3) {

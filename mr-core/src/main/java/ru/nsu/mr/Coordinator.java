@@ -21,9 +21,13 @@ import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class Coordinator {
 
@@ -47,11 +51,15 @@ public class Coordinator {
     private Phase currentPhase = Phase.MAP;
     private int finishedMappersCount = 0;
     private int finishedReducersCount = 0;
+    private static final long HEARTBEAT_PERIOD_MS = 5000;
+    private static final long HEARTBEAT_TIMEOUT_MS = 2000;
+    private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
     private static class ConnectedWorker {
         private final String workerBaseUrl;
         private final WorkerGateway gateway;
         private Integer currentTaskId = null;
+        private NewTaskDetails currentTaskDetails = null;
 
         public ConnectedWorker(String workerBaseUrl) {
             this.workerBaseUrl = workerBaseUrl;
@@ -62,12 +70,18 @@ public class Coordinator {
             return currentTaskId == null;
         }
 
-        public synchronized void assignTask(int taskId) {
-            this.currentTaskId = taskId;
+        public synchronized void assignTask(NewTaskDetails task) {
+            this.currentTaskId = task.taskInformation().taskId();
+            this.currentTaskDetails = task;
         }
 
         public synchronized void release() {
             this.currentTaskId = null;
+            this.currentTaskDetails = null;
+        }
+
+        public synchronized NewTaskDetails getCurrentTaskDetails() {
+            return currentTaskDetails;
         }
 
         public synchronized WorkerGateway getGateway() {
@@ -80,6 +94,13 @@ public class Coordinator {
         configureLogging();
         endpoint = new CoordinatorEndpoint(coordinatorBaseUrl, this::registerWorker, this::receiveTaskCompletion);
         endpoint.startServer();
+
+        heartbeatScheduler.scheduleAtFixedRate(
+                this::checkAllWorkersHealth,
+                HEARTBEAT_PERIOD_MS,
+                HEARTBEAT_PERIOD_MS,
+                TimeUnit.MILLISECONDS
+        );
     }
 
     public void setJobConfiguration(Configuration jobConfiguration) {
@@ -99,7 +120,6 @@ public class Coordinator {
         if (jobConfig == null) {
             throw new IllegalStateException("Job configuration not set.");
         }
-
         LOGGER.info("Starting job with configuration: JOB_PATH={}, MAPPERS_COUNT={}, REDUCERS_COUNT={}",
                 jobConfig.get(ConfigurationOption.JOB_PATH),
                 jobConfig.get(ConfigurationOption.MAPPERS_COUNT),
@@ -146,8 +166,8 @@ public class Coordinator {
                 mapTaskQueue.add(newTask);
             }
         } catch (Exception e) {
-            LOGGER.error("Error while creating MAP tasks: {}", e.getMessage());
-            throw new RuntimeException(e);
+            LOGGER.error("Error while creating MAP tasks", e);
+            throw new RuntimeException("Failed to create MAP tasks", e);
         }
         for (int i = 0; i < reducersCount; i++) {
             List<String> reduceInputs = new ArrayList<>();
@@ -167,6 +187,7 @@ public class Coordinator {
         }
         waitForJobEnd();
         Thread.sleep(1000);
+        heartbeatScheduler.shutdownNow();
         endpoint.stopServer();
         LOGGER.info("Job has finished successfully.");
     }
@@ -220,20 +241,31 @@ public class Coordinator {
     }
 
     private synchronized void distributeTasks() {
-        Queue<NewTaskDetails> currentQueue = currentPhase == Phase.MAP ? mapTaskQueue : reduceTaskQueue;
-        while (!currentQueue.isEmpty()) {
-            Optional<ConnectedWorker> freeWorker = workers.stream().filter(ConnectedWorker::isFree).findFirst();
+        if (currentPhase == Phase.MAP) {
+            assignTasksFromQueue(mapTaskQueue);
+        } else if (currentPhase == Phase.REDUCE) {
+            assignTasksFromQueue(reduceTaskQueue);
+        }
+    }
+
+    private void assignTasksFromQueue(Queue<NewTaskDetails> queue) {
+        while (!queue.isEmpty()) {
+            Optional<ConnectedWorker> freeWorker =
+                    workers.stream().filter(ConnectedWorker::isFree).findFirst();
             if (freeWorker.isPresent()) {
-                NewTaskDetails task = currentQueue.poll();
+                NewTaskDetails task = queue.poll();
                 ConnectedWorker worker = freeWorker.get();
                 try {
                     worker.getGateway().createTask(task);
-                    worker.assignTask(task.taskInformation().taskId());
-                    LOGGER.info("Assigned task {} to worker {}", task.taskInformation().taskId(), worker.workerBaseUrl);
+                    worker.assignTask(task);
+                    LOGGER.info("Assigned task {} to worker {}",
+                            task.taskInformation().taskId(), worker.workerBaseUrl);
                 } catch (IOException | InterruptedException e) {
-                    LOGGER.error("Failed to assign task {} to worker {}: {}",
-                            task.taskInformation().taskId(), worker.workerBaseUrl, e.getMessage());
-                    currentQueue.add(task);
+                    LOGGER.error("Failed to assign task {} to worker {}",
+                            task.taskInformation().taskId(),
+                            worker.workerBaseUrl,
+                            e);
+                    queue.add(task);
                     break;
                 }
             } else {
@@ -248,6 +280,44 @@ public class Coordinator {
         }
     }
 
+    private void checkAllWorkersHealth() {
+        List<ConnectedWorker> currentWorkers;
+        synchronized (this) {
+            currentWorkers = new ArrayList<>(workers);
+        }
+
+        for (ConnectedWorker w : currentWorkers) {
+            try {
+                if (!isWorkerAlive(w)) {
+                    LOGGER.warn("Worker {} is considered DEAD. Reassigning task.",
+                            w.workerBaseUrl);
+                    handleDeadWorker(w);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Error in heartbeat check for worker {}",
+                        w.workerBaseUrl, e);
+            }
+        }
+    }
+
+    private boolean isWorkerAlive(ConnectedWorker worker) {
+        return worker.getGateway().isAlive();
+    }
+
+    private synchronized void handleDeadWorker(ConnectedWorker worker) {
+        workers.remove(worker);
+        NewTaskDetails assignedTask = worker.getCurrentTaskDetails();
+        if (assignedTask != null) {
+            if (assignedTask.taskInformation().taskType() == TaskType.MAP) {
+                mapTaskQueue.add(assignedTask);
+            } else {
+                reduceTaskQueue.add(assignedTask);
+            }
+            worker.release();
+        }
+        distributeTasks();
+    }
+
     private void configureLogging() throws IOException {
         synchronized (lock) {
             String url = coordinatorBaseUrl;
@@ -256,7 +326,7 @@ public class Coordinator {
                 deleteDirectory(logPath);
             }
             Files.createDirectories(logPath);
-            String logFileName = String.format("logs-coordinator-%s.log", url);
+            String logFileName = String.format("logs-coordinator-%s.log", (new URL(url)).getPort());
             Path logFile = logPath.resolve(logFileName);
             if (!isConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();

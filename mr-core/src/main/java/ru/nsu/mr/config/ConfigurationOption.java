@@ -32,7 +32,7 @@ public class ConfigurationOption<T> {
             new ConfigurationOption<>("mr.reducers.count", 1);
 
     public static ConfigurationOption<Integer> SORTER_IN_MEMORY_RECORDS =
-            new ConfigurationOption<>("mr.sorter.in.memory.records", 10000);
+            new ConfigurationOption<>("mr.sorter.in.memory.records", 300000);
 
     public ConfigurationOption(String name, T defaultValue) {
         this.name = name;
