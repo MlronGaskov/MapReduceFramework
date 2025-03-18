@@ -12,6 +12,7 @@ repositories {
 dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+
     implementation project(':mr-core')
     implementation project(':mr-api')
 }
@@ -30,6 +31,10 @@ tasks.named('jar') {
     manifest {
         attributes 'Main-Class': 'ru.nsu.mr.Application'
     }
+    exclude '**/Log4j2Plugins.dat'
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
 }
 
 test {
