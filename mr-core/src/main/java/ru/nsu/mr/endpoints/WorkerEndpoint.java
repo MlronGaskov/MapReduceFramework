@@ -34,6 +34,7 @@ public class WorkerEndpoint {
         URI uri = URI.create(workerBaseUrl);
         server = HttpServer.create(new InetSocketAddress(uri.getHost(), uri.getPort()), 0);
         server.createContext("/tasks", new TasksHandler());
+        server.createContext("/health", new HealthHandler());
         this.taskService = taskService;
     }
 
@@ -44,6 +45,17 @@ public class WorkerEndpoint {
     public void stopServer() {
         if (server != null) {
             server.stop(0);
+        }
+    }
+
+    private static class HealthHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                HttpUtils.sendResponse(exchange, STATUS_OK, "OK");
+            } else {
+                HttpUtils.sendErrorResponse(exchange, STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed");
+            }
         }
     }
 
