@@ -21,8 +21,6 @@ import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -319,16 +317,22 @@ public class Coordinator {
         distributeTasks();
     }
 
-    private void configureLogging() throws IOException, URISyntaxException {
+    private void configureLogging() throws IOException {
         synchronized (lock) {
-            String url = coordinatorBaseUrl;
+            String sanitizedCoordinatorId = coordinatorBaseUrl
+                    .replaceAll("https?://", "")
+                    .replaceAll("[^a-zA-Z0-9.-]", "_");
+
             Path logPath = Path.of("./logs");
             if (Files.exists(logPath)) {
                 deleteDirectory(logPath);
             }
             Files.createDirectories(logPath);
-            String logFileName = String.format("logs-coordinator-%s.log", (new URI(url)).getPort());
+
+            String logFileName = String.format("logs-coordinator-%s.log", sanitizedCoordinatorId);
+
             Path logFile = logPath.resolve(logFileName);
+
             if (!isConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
                 builder.setStatusLevel(Level.ERROR);
@@ -338,7 +342,8 @@ public class Coordinator {
                 context = (LoggerContext) LogManager.getContext(false);
                 context.start(builder.build());
             }
-            String appenderName = "FileAppender-" + url;
+
+            String appenderName = "FileAppender-" + sanitizedCoordinatorId;
             FileAppender fileAppender = FileAppender.newBuilder()
                     .setName(appenderName)
                     .withFileName(logFile.toString())
@@ -349,6 +354,7 @@ public class Coordinator {
             fileAppender.start();
             context.getConfiguration().addAppender(fileAppender);
             context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+
             String consoleAppenderName = "ConsoleAppender";
             ConsoleAppender consoleAppender = ConsoleAppender.newBuilder()
                     .setName(consoleAppenderName)
@@ -359,8 +365,9 @@ public class Coordinator {
             consoleAppender.start();
             context.getConfiguration().addAppender(consoleAppender);
             context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+
             context.updateLoggers();
-            LOGGER = LogManager.getLogger("coordinator-" + url);
+            LOGGER = LogManager.getLogger("coordinator-" + sanitizedCoordinatorId);
         }
     }
 
