@@ -21,7 +21,8 @@ import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import java.io.IOException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -318,7 +319,7 @@ public class Coordinator {
         distributeTasks();
     }
 
-    private void configureLogging() throws IOException {
+    private void configureLogging() throws IOException, URISyntaxException {
         synchronized (lock) {
             String url = coordinatorBaseUrl;
             Path logPath = Path.of("./logs");
@@ -326,7 +327,7 @@ public class Coordinator {
                 deleteDirectory(logPath);
             }
             Files.createDirectories(logPath);
-            String logFileName = String.format("logs-coordinator-%s.log", (new URL(url)).getPort());
+            String logFileName = String.format("logs-coordinator-%s.log", (new URI(url)).getPort());
             Path logFile = logPath.resolve(logFileName);
             if (!isConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
