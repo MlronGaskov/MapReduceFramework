@@ -3,6 +3,9 @@ package ru.nsu.mr.endpoints;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import ru.nsu.mr.config.Configuration;
+import ru.nsu.mr.config.ConfigurationOption;
+import ru.nsu.mr.endpoints.dto.NewJobDetails;
 import ru.nsu.mr.endpoints.dto.TaskDetails;
 import ru.nsu.mr.gateway.HttpUtils;
 
@@ -19,17 +22,21 @@ public class CoordinatorEndpoint {
     private final HttpServer httpServer;
     private final Consumer<String> onWorkerRegistration;
     private final Consumer<TaskDetails> onTaskNotification;
+    private final Consumer<Configuration> onJobSubmission;
 
     public CoordinatorEndpoint(
             String coordinatorBaseUrl,
             Consumer<String> onWorkerRegistration,
-            Consumer<TaskDetails> onTaskNotification) throws IOException {
+            Consumer<TaskDetails> onTaskNotification,
+            Consumer<Configuration> onJobSubmission) throws IOException {
         URI uri = URI.create(coordinatorBaseUrl);
         this.httpServer = HttpServer.create(new InetSocketAddress(uri.getHost(), uri.getPort()), 0);
         this.onWorkerRegistration = onWorkerRegistration;
         this.onTaskNotification = onTaskNotification;
+        this.onJobSubmission = onJobSubmission;
         httpServer.createContext("/workers", new WorkerRegistrationHandler());
         httpServer.createContext("/notifyTask", new TaskNotificationHandler());
+        httpServer.createContext("/job", new JobSubmissionHandler());
     }
 
     public void startServer() {
@@ -71,6 +78,36 @@ public class CoordinatorEndpoint {
                         taskDetails.taskInformation().taskId());
             } catch (Exception e) {
                 HttpUtils.sendErrorResponse(exchange, STATUS_BAD_REQUEST, "Failed to process task notification: " + e.getMessage());
+            }
+        }
+    }
+
+    private class JobSubmissionHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"PUT".equalsIgnoreCase(exchange.getRequestMethod())) {
+                HttpUtils.sendErrorResponse(exchange, STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed");
+                return;
+            }
+            try {
+                NewJobDetails jobDetails = HttpUtils.readRequestBody(exchange, NewJobDetails.class);
+                Configuration jobConfig = new Configuration()
+                        .set(ConfigurationOption.JOB_ID, jobDetails.jobId())
+                        .set(ConfigurationOption.JOB_PATH, jobDetails.jobPath())
+                        .set(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING, jobDetails.jobStorageConnectionString())
+                        .set(ConfigurationOption.INPUTS_PATH, jobDetails.inputsPath())
+                        .set(ConfigurationOption.MAPPERS_OUTPUTS_PATH, jobDetails.mappersOutputsPath())
+                        .set(ConfigurationOption.REDUCERS_OUTPUTS_PATH, jobDetails.reducersOutputsPath())
+                        .set(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING, jobDetails.dataStorageConnectionString())
+                        .set(ConfigurationOption.MAPPERS_COUNT, jobDetails.mappersCount())
+                        .set(ConfigurationOption.REDUCERS_COUNT, jobDetails.reducersCount())
+                        .set(ConfigurationOption.SORTER_IN_MEMORY_RECORDS, jobDetails.sorterInMemoryRecords());
+                onJobSubmission.accept(jobConfig);
+                HttpUtils.sendResponse(exchange, STATUS_OK, "Job accepted");
+            } catch (IllegalStateException e) {
+                HttpUtils.sendErrorResponse(exchange, STATUS_BAD_REQUEST, e.getMessage());
+            } catch (Exception e) {
+                HttpUtils.sendErrorResponse(exchange, STATUS_BAD_REQUEST, "Failed to process job submission: " + e.getMessage());
             }
         }
     }
