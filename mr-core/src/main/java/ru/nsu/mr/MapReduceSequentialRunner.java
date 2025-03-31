@@ -35,8 +35,14 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
                 inputFilesToProcess.add(inputFileToProcess);
             }
             try {
-                MapReduceTasksRunner.executeMapperTask(
-                        inputFilesToProcess, i, mappersOutputDirectory, configuration, job, LOGGER);
+                if(!job.getReducer().altMode()) {
+                    MapReduceTasksRunner.executeMapperTask(
+                            inputFilesToProcess, i, mappersOutputDirectory, configuration, job, LOGGER);
+                } else {
+                    MapReduceTasksRunner.executeAltMapperTask(
+                            inputFilesToProcess, i, mappersOutputDirectory, configuration, job, LOGGER);
+                }
+
             } catch (IOException e) {
                 throw new RuntimeException();
             }
@@ -50,8 +56,14 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
                         mappersOutputDirectory.resolve("mapper-output-" + k + "-" + i + ".txt"));
             }
             try {
-                MapReduceTasksRunner.executeReduceTask(
-                        interFilesToReduce, i, outputDirectory, configuration, job, LOGGER);
+                if(!job.getReducer().altMode()) {
+                    MapReduceTasksRunner.executeReducerTask(
+                            interFilesToReduce, i, outputDirectory, configuration, job, LOGGER);
+                } else {
+                    MapReduceTasksRunner.executeAltReducerTask(
+                            interFilesToReduce, i, outputDirectory, configuration, job, LOGGER);
+                }
+
             } catch (IOException e) {
                 throw new RuntimeException();
             }

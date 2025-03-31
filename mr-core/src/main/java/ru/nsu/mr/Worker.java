@@ -258,21 +258,45 @@ public class Worker {
                 Path outputDir = tempDir.getPath().resolve("output");
                 Files.createDirectories(outputDir);
                 if (currentTask.taskInformation.taskType().equals(TaskType.MAP)) {
-                    MapReduceTasksRunner.executeMapperTask(
-                            localInputFiles,
-                            currentTask.taskInformation.taskId(),
-                            outputDir,
-                            currentTask.jobConfiguration,
-                            currentTask.job,
-                            LOGGER);
+                    if (!currentTask.job.getReducer().altMode()) {
+                        MapReduceTasksRunner.executeMapperTask(
+                                localInputFiles,
+                                currentTask.taskInformation.taskId(),
+                                outputDir,
+                                currentTask.jobConfiguration,
+                                currentTask.job,
+                                LOGGER);
+                    }
+                    else {
+                        MapReduceTasksRunner.executeAltMapperTask(
+                                localInputFiles,
+                                currentTask.taskInformation.taskId(),
+                                outputDir,
+                                currentTask.jobConfiguration,
+                                currentTask.job,
+                                LOGGER);
+                    }
+
                 } else if (currentTask.taskInformation.taskType().equals(TaskType.REDUCE)) {
-                    MapReduceTasksRunner.executeReduceTask(
-                            localInputFiles,
-                            currentTask.taskInformation.taskId() - currentTask.jobConfiguration.get(ConfigurationOption.MAPPERS_COUNT),
-                            outputDir,
-                            currentTask.jobConfiguration,
-                            currentTask.job,
-                            LOGGER);
+                    if (!currentTask.job.getReducer().altMode()) {
+                        MapReduceTasksRunner.executeReducerTask(
+                                localInputFiles,
+                                currentTask.taskInformation.taskId() - currentTask.jobConfiguration.get(ConfigurationOption.MAPPERS_COUNT),
+                                outputDir,
+                                currentTask.jobConfiguration,
+                                currentTask.job,
+                                LOGGER);
+                    }
+                    else{
+                        MapReduceTasksRunner.executeAltReducerTask(
+                                localInputFiles,
+                                currentTask.taskInformation.taskId() - currentTask.jobConfiguration.get(ConfigurationOption.MAPPERS_COUNT),
+                                outputDir,
+                                currentTask.jobConfiguration,
+                                currentTask.job,
+                                LOGGER);
+                    }
+
                 }
                 tempDir.put(outputDir, currentTask.taskInformation.targetDir());
                 LOGGER.info("Worker {} finished executing task: {}.",

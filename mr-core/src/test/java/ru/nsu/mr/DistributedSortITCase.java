@@ -56,7 +56,7 @@ class DistributedSortITCase {
         }
     }
 
-    static class DistributedSortReducer implements Reducer<String, Integer, String, Integer> {
+    static class DistributedSortReducer extends AfterMapReducer<String, Integer, String, Integer> {
         @Override
         public void reduce(
                 String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
@@ -86,6 +86,9 @@ class DistributedSortITCase {
                         INTEGER_DESERIALIZER,
                         STRING_SERIALIZER,
                         INTEGER_SERIALIZER,
+                        STRING_DESERIALIZER,
+                        INTEGER_DESERIALIZER,
+                        STRING_KEY_COMPARATOR,
                         STRING_KEY_COMPARATOR,
                         STRING_KEY_HASH);
 

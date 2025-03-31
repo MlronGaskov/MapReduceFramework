@@ -56,7 +56,7 @@ class WordCountITCase {
         }
     }
 
-    static class WordCountReducer implements Reducer<String, Integer, String, Integer> {
+    static class WordCountReducer extends InMapReducer<String, Integer, String, Integer> {
         @Override
         public void reduce(
                 String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
@@ -70,6 +70,11 @@ class WordCountITCase {
                 sum += values.next();
             }
             output.put(key, sum);
+        }
+        @Override
+        public void generalReduce(
+                String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
+            reduce(key, values, output);
         }
     }
 
@@ -94,6 +99,9 @@ class WordCountITCase {
                         INTEGER_DESERIALIZER,
                         STRING_SERIALIZER,
                         INTEGER_SERIALIZER,
+                        STRING_DESERIALIZER,
+                        INTEGER_DESERIALIZER,
+                        STRING_KEY_COMPARATOR,
                         STRING_KEY_COMPARATOR,
                         STRING_KEY_HASH);
 

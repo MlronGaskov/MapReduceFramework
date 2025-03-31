@@ -11,7 +11,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -19,6 +18,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static ru.nsu.mr.PredefinedFunctions.*;
 import static ru.nsu.mr.config.ConfigurationOption.MAPPERS_COUNT;
 import static ru.nsu.mr.config.ConfigurationOption.REDUCERS_COUNT;
 
@@ -50,7 +50,7 @@ public class WebLinkGraphITCase {
         }
     }
 
-    static class ReverseWebLinkReducer implements Reducer<String, String, String, List<String>> {
+    static class ReverseWebLinkReducer extends AfterMapReducer<String, String, String, List<String>> {
         @Override
         public void reduce(
                 String key, Iterator<String> values, OutputContext<String, List<String>> output) {
@@ -85,7 +85,10 @@ public class WebLinkGraphITCase {
                         x -> x,
                         x -> x,
                         Object::toString,
-                        String::compareTo,
+                        x -> x,
+                        LIST_DESERIALIZER,
+                        STRING_KEY_COMPARATOR,
+                        STRING_KEY_COMPARATOR,
                         String::hashCode);
 
         Configuration config =
