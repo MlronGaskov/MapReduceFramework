@@ -48,12 +48,17 @@ public class Coordinator {
     private final Queue<NewTaskDetails> mapTaskQueue = new ConcurrentLinkedQueue<>();
     private final Queue<NewTaskDetails> reduceTaskQueue = new ConcurrentLinkedQueue<>();
     private Configuration jobConfig;
-    private Phase currentPhase = Phase.MAP;
-    private int finishedMappersCount = 0;
-    private int finishedReducersCount = 0;
+    private Phase currentPhase;
+    private int finishedMappersCount;
+    private int finishedReducersCount;
+  
     private static final long HEARTBEAT_PERIOD_MS = 5000;
     private static final long HEARTBEAT_TIMEOUT_MS = 2000;
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
+
+    private final Object jobLock = new Object();
+    private volatile boolean busy = false;
+    private volatile Configuration pendingJob = null;
 
     private static class ConnectedWorker {
         private final String workerBaseUrl;
@@ -83,7 +88,7 @@ public class Coordinator {
         public synchronized NewTaskDetails getCurrentTaskDetails() {
             return currentTaskDetails;
         }
-
+      
         public synchronized WorkerGateway getGateway() {
             return gateway;
         }
@@ -92,9 +97,13 @@ public class Coordinator {
     public Coordinator(String coordinatorBaseUrl) throws IOException {
         this.coordinatorBaseUrl = coordinatorBaseUrl;
         configureLogging();
-        endpoint = new CoordinatorEndpoint(coordinatorBaseUrl, this::registerWorker, this::receiveTaskCompletion);
+        endpoint = new CoordinatorEndpoint(
+                coordinatorBaseUrl,
+                this::registerWorker,
+                this::receiveTaskCompletion,
+                this::submitJob);
         endpoint.startServer();
-
+      
         heartbeatScheduler.scheduleAtFixedRate(
                 this::checkAllWorkersHealth,
                 HEARTBEAT_PERIOD_MS,
@@ -116,10 +125,24 @@ public class Coordinator {
         setJobConfiguration(config);
     }
 
-    public void start() throws InterruptedException {
-        if (jobConfig == null) {
-            throw new IllegalStateException("Job configuration not set.");
+    public void submitJob(Configuration job) {
+        if (busy) {
+            throw new IllegalStateException("Coordinator is busy");
         }
+        synchronized (jobLock) {
+            pendingJob = job;
+            busy = true;
+            jobLock.notifyAll();
+        }
+    }
+
+    private void executeJob() throws InterruptedException {
+        currentPhase = Phase.MAP;
+        finishedMappersCount = 0;
+        finishedReducersCount = 0;
+        mapTaskQueue.clear();
+        reduceTaskQueue.clear();
+
         LOGGER.info("Starting job with configuration: JOB_PATH={}, MAPPERS_COUNT={}, REDUCERS_COUNT={}",
                 jobConfig.get(ConfigurationOption.JOB_PATH),
                 jobConfig.get(ConfigurationOption.MAPPERS_COUNT),
@@ -145,7 +168,7 @@ public class Coordinator {
         try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(dataStorageConnectionString)) {
             List<String> inputFiles = storageProvider.list(inputsPath);
             int totalInputs = inputFiles.size();
-            LOGGER.info("Found {} input files in {}", inputFiles.size(), inputsPath);
+            LOGGER.info("Found {} input files in {}\n {}", inputFiles.size(), inputsPath, inputFiles);
             int processed = 0;
             for (int i = 0; i < mappersCount; i++) {
                 int count = (totalInputs - processed) / (mappersCount - i);
@@ -166,8 +189,8 @@ public class Coordinator {
                 mapTaskQueue.add(newTask);
             }
         } catch (Exception e) {
-            LOGGER.error("Error while creating MAP tasks", e);
-            throw new RuntimeException("Failed to create MAP tasks", e);
+            LOGGER.error("Error while creating MAP tasks: {}", e.getMessage());
+            throw new RuntimeException(e);
         }
         for (int i = 0; i < reducersCount; i++) {
             List<String> reduceInputs = new ArrayList<>();
@@ -185,11 +208,42 @@ public class Coordinator {
             reduceTaskQueue.add(newTask);
             LOGGER.info("Created REDUCE task {} with {} input files", mappersCount + i, reduceInputs.size());
         }
+        distributeTasks();
         waitForJobEnd();
         Thread.sleep(1000);
-        heartbeatScheduler.shutdownNow();
-        endpoint.stopServer();
         LOGGER.info("Job has finished successfully.");
+    }
+
+
+    public void start() throws InterruptedException {
+        if (jobConfig != null) {
+            executeJob();
+            Thread.sleep(1000);
+            endpoint.stopServer();
+            heartbeatScheduler.shutdownNow();
+        } else {
+            LOGGER.info("Starting job without initial configuration.");
+            while (!Thread.currentThread().isInterrupted()) {
+                synchronized (jobLock) {
+                    LOGGER.info("Waiting for job.");
+                    while (pendingJob == null) {
+                        jobLock.wait();
+                    }
+                    this.jobConfig = pendingJob;
+                    pendingJob = null;
+                }
+                try {
+                    executeJob();
+                } catch (Exception e) {
+                    LOGGER.error("Job execution failed: {}", e.getMessage());
+                } finally {
+                    synchronized (jobLock) {
+                        busy = false;
+                        jobConfig = null;
+                    }
+                }
+            }
+        }
     }
 
     private synchronized void registerWorker(String workerBaseUrl) {
@@ -197,10 +251,12 @@ public class Coordinator {
         workers.add(worker);
         distributeTasks();
         notifyAll();
+        LOGGER.info("Worker registered, on {}.", workerBaseUrl);
     }
 
     private synchronized void receiveTaskCompletion(TaskDetails details) {
         if ("SUCCEED".equals(details.status())) {
+            LOGGER.info("Task completed, on {}.", details.taskInformation().taskId());
             if (details.taskInformation().taskType() == TaskType.MAP) {
                 finishedMappersCount++;
                 if (finishedMappersCount == jobConfig.get(ConfigurationOption.MAPPERS_COUNT)) {
@@ -274,12 +330,6 @@ public class Coordinator {
         }
     }
 
-    private synchronized void waitForJobEnd() throws InterruptedException {
-        while (currentPhase != Phase.JOB_ENDED) {
-            wait();
-        }
-    }
-
     private void checkAllWorkersHealth() {
         List<ConnectedWorker> currentWorkers;
         synchronized (this) {
@@ -318,6 +368,12 @@ public class Coordinator {
         distributeTasks();
     }
 
+    private synchronized void waitForJobEnd() throws InterruptedException {
+        while (currentPhase != Phase.JOB_ENDED) {
+            wait();
+        }
+    }
+
     private void configureLogging() throws IOException {
         synchronized (lock) {
             String sanitizedCoordinatorId = coordinatorBaseUrl
@@ -331,7 +387,6 @@ public class Coordinator {
             Files.createDirectories(logPath);
 
             String logFileName = String.format("logs-coordinator-%s.log", sanitizedCoordinatorId);
-
             Path logFile = logPath.resolve(logFileName);
 
             if (!isConfigured) {
