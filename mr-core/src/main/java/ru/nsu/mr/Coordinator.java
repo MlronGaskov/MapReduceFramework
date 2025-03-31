@@ -75,9 +75,9 @@ public class Coordinator {
             return currentTaskId == null;
         }
 
-        public synchronized void assignTask(int taskId) {
+        public synchronized void assignTask(NewTaskDetails task) {
             this.currentTaskId = task.taskInformation().taskId();
-            this.currentTaskId = taskId;
+            this.currentTaskDetails = task;
         }
 
         public synchronized void release() {
@@ -251,10 +251,12 @@ public class Coordinator {
         workers.add(worker);
         distributeTasks();
         notifyAll();
+        LOGGER.info("Worker registered, on {}.", workerBaseUrl);
     }
 
     private synchronized void receiveTaskCompletion(TaskDetails details) {
         if ("SUCCEED".equals(details.status())) {
+            LOGGER.info("Task completed, on {}.", details.taskInformation().taskId());
             if (details.taskInformation().taskType() == TaskType.MAP) {
                 finishedMappersCount++;
                 if (finishedMappersCount == jobConfig.get(ConfigurationOption.MAPPERS_COUNT)) {
