@@ -49,7 +49,7 @@ class InvertedIndexITCase {
         }
     }
 
-    static class InvertedIndexReducer implements Reducer<String, String, String, List<String>> {
+    static class InvertedIndexReducer extends AfterMapReducer<String, String, String, List<String>> {
         @Override
         public void reduce(
                 String key, Iterator<String> values, OutputContext<String, List<String>> output) {
@@ -78,6 +78,9 @@ class InvertedIndexITCase {
                         STRING_DESERIALIZER,
                         STRING_SERIALIZER,
                         LIST_SERIALIZER,
+                        STRING_DESERIALIZER,
+                        LIST_DESERIALIZER,
+                        STRING_KEY_COMPARATOR,
                         STRING_KEY_COMPARATOR,
                         STRING_KEY_HASH);
 

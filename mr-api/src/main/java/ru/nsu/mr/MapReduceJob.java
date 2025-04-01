@@ -11,7 +11,10 @@ public class MapReduceJob<K1, V1, K2, V2> {
     private final Deserializer<V1> deserializerInterValue;
     private final Serializer<K2> serializerOutKey;
     private final Serializer<V2> serializerOutValue;
-    private final Comparator<K1> comparator;
+    private final Deserializer<K2> deserializerOutKey;
+    private final Deserializer<V2> deserializerOutValue;
+    private final Comparator<K1> interComparator;
+    private final Comparator<K2> outComparator;
     private final KeyHasher<K1> hasher;
 
     public MapReduceJob(
@@ -23,7 +26,10 @@ public class MapReduceJob<K1, V1, K2, V2> {
             Deserializer<V1> deserializerInterValue,
             Serializer<K2> serializerOutKey,
             Serializer<V2> serializerOutValue,
-            Comparator<K1> comparator,
+            Deserializer<K2> deserializerOutKey,
+            Deserializer<V2> deserializerOutValue,
+            Comparator<K1> interComparator,
+            Comparator<K2> outComparator,
             KeyHasher<K1> hasher) {
         this.mapper = mapper;
         this.reducer = reducer;
@@ -33,7 +39,10 @@ public class MapReduceJob<K1, V1, K2, V2> {
         this.deserializerInterValue = deserializerInterValue;
         this.serializerOutKey = serializerOutKey;
         this.serializerOutValue = serializerOutValue;
-        this.comparator = comparator;
+        this.deserializerOutKey = deserializerOutKey;
+        this.deserializerOutValue = deserializerOutValue;
+        this.interComparator = interComparator;
+        this.outComparator = outComparator;
         this.hasher = hasher;
     }
 
@@ -69,9 +78,15 @@ public class MapReduceJob<K1, V1, K2, V2> {
         return serializerOutValue;
     }
 
-    public Comparator<K1> getComparator() {
-        return comparator;
+    public Deserializer<K2> getDeserializerOutKey() { return deserializerOutKey; }
+
+    public  Deserializer<V2> getDeserializerOutValue() { return deserializerOutValue; }
+
+    public Comparator<K1> getInterComparator() {
+        return interComparator;
     }
+
+    public Comparator<K2> getOutComparator() { return outComparator; }
 
     public KeyHasher<K1> getHasher() {
         return hasher;

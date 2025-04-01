@@ -37,6 +37,9 @@ public class SlowWordCounterProgram {
                         INTEGER_DESERIALIZER,
                         STRING_SERIALIZER,
                         INTEGER_SERIALIZER,
+                        STRING_DESERIALIZER,
+                        INTEGER_DESERIALIZER,
+                        STRING_KEY_COMPARATOR,
                         STRING_KEY_COMPARATOR,
                         STRING_KEY_HASH);
 
@@ -74,7 +77,7 @@ public class SlowWordCounterProgram {
         }
     }
 
-    static class WordCountReducer implements Reducer<String, Integer, String, Integer> {
+    static class WordCountReducer extends AfterMapReducer<String, Integer, String, Integer> {
         @Override
         public void reduce(
                 String key, Iterator<Integer> values, OutputContext<String, Integer> output) {
