@@ -48,18 +48,6 @@ public class WorkerGateway {
         return Arrays.asList(tasks);
     }
 
-//    public boolean isAlive() {
-//        try {
-//            String response = HttpUtils.sendGetRequest(
-//                    httpClient,
-//                    workerBaseUrl + "/health",
-//                    String.class,
-//                    "Failed to get health status");
-//            return "OK".equalsIgnoreCase(response);
-//        } catch (Exception e) {
-//            return false;
-//        }
-//    }
     public boolean isAlive() {
         try {
             HttpRequest request = HttpRequest.newBuilder()
