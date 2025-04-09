@@ -6,9 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import ru.nsu.mr.config.Configuration;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -17,6 +15,8 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static ru.nsu.mr.config.ConfigurationOption.MAPPERS_COUNT;
@@ -162,9 +162,10 @@ public class WebLinkGraphITCase {
     }
 
     private void compareFileContents(Path file1, Path file2) throws IOException {
-        try (BufferedReader reader1 = Files.newBufferedReader(file1);
-                BufferedReader reader2 = Files.newBufferedReader(file2)) {
-
+        try (
+                BufferedReader reader1 = openPossiblyZippedFile(file1);
+                BufferedReader reader2 = Files.newBufferedReader(file2)
+        ) {
             String line1 = reader1.readLine();
             String line2 = reader2.readLine();
 
@@ -175,6 +176,20 @@ public class WebLinkGraphITCase {
             }
         }
     }
+
+    private BufferedReader openPossiblyZippedFile(Path file) throws IOException {
+        if (file.toString().endsWith(".zip")) {
+            ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(file));
+            ZipEntry entry = zipInputStream.getNextEntry();
+            if (entry == null) {
+                throw new IOException("ZIP archive is empty: " + file);
+            }
+            return new BufferedReader(new InputStreamReader(zipInputStream));
+        } else {
+            return Files.newBufferedReader(file);
+        }
+    }
+
 
     private void deleteDirectory(Path path) throws IOException {
         try (Stream<Path> pathStream = Files.walk(path)) {
