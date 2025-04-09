@@ -6,12 +6,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 class SortedFileSinkTest {
     private Path outputFilePath;
@@ -19,7 +23,7 @@ class SortedFileSinkTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        outputFilePath = Files.createTempFile("sorted_output", ".txt");
+        outputFilePath = Files.createTempFile("sorted_output", ".zip");
         sortedFileSink =
                 new SortedFileSink<>(
                         Object::toString,
@@ -59,13 +63,25 @@ class SortedFileSinkTest {
         return numbers;
     }
 
-    private List<Integer> readSortedNumbersFromFile(Path filePath) throws IOException {
+    private List<Integer> readSortedNumbersFromFile(Path zipFilePath) throws IOException {
         List<Integer> numbers = new ArrayList<>();
-        List<String> lines = Files.readAllLines(filePath);
-        for (String line : lines) {
-            String[] parts = line.split(" ");
-            numbers.add(Integer.parseInt(parts[0]));
+
+        try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(zipFilePath))) {
+            ZipEntry entry = zipInputStream.getNextEntry();
+            if (entry == null) {
+                throw new IOException("ZIP archive is empty: " + zipFilePath);
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(zipInputStream))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(" ");
+                    numbers.add(Integer.parseInt(parts[0]));
+                }
+            }
         }
+
         return numbers;
     }
+
 }
