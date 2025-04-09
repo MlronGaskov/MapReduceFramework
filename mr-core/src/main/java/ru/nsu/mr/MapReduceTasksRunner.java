@@ -32,17 +32,15 @@ public class MapReduceTasksRunner {
             throws IOException {
         List<FileSystemSink<K_I, V_I>> sortedFileSinks = new ArrayList<>();
         for (int i = 0; i < configuration.get(ConfigurationOption.REDUCERS_COUNT); ++i) {
-            Files.deleteIfExists(
-                    mappersOutputDirectory.resolve("mapper-output-" + mapperId + "-" + i + ".txt"));
+            Path zipPath = mappersOutputDirectory.resolve("mapper-output-" + mapperId + "-" + i + ".zip");
+            Files.deleteIfExists(zipPath);
             sortedFileSinks.add(
                     new SortedFileSink<>(
                             job.getSerializerInterKey(),
                             job.getSerializerInterValue(),
                             job.getDeserializerInterKey(),
                             job.getDeserializerInterValue(),
-                            Files.createFile(
-                                    mappersOutputDirectory.resolve(
-                                            "mapper-output-" + mapperId + "-" + i + ".txt")),
+                            zipPath,
                             configuration.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS),
                             job.getComparator()));
         }

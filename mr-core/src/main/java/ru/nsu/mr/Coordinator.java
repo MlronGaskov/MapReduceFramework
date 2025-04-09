@@ -195,7 +195,7 @@ public class Coordinator {
         for (int i = 0; i < reducersCount; i++) {
             List<String> reduceInputs = new ArrayList<>();
             for (int j = 0; j < mappersCount; j++) {
-                reduceInputs.add(mappersOutputsPath + "/mapper-output-" + j + "-" + i + ".txt");
+                reduceInputs.add(mappersOutputsPath + "/mapper-output-" + j + "-" + i + ".zip");
             }
             TaskInformation taskInfo = new TaskInformation(
                     mappersCount + i,

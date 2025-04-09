@@ -5,10 +5,13 @@ import ru.nsu.mr.Pair;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class KeyValueFileIterator<K, V> implements Iterator<Pair<K, V>>, AutoCloseableSource {
     private final BufferedReader reader;
@@ -20,9 +23,22 @@ public class KeyValueFileIterator<K, V> implements Iterator<Pair<K, V>>, AutoClo
     public KeyValueFileIterator(
             Path filePath, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer)
             throws IOException {
-        this.reader = Files.newBufferedReader(filePath);
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
+
+        if (filePath.toString().endsWith(".zip")) {
+            ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(filePath));
+            ZipEntry entry = zipInputStream.getNextEntry();
+            if (entry == null) {
+                throw new IOException("ZIP file is empty: " + filePath);
+            }
+
+            InputStreamReader isr = new InputStreamReader(zipInputStream);
+            this.reader = new BufferedReader(isr);
+        } else {
+            this.reader = Files.newBufferedReader(filePath);
+        }
+
         this.nextLine = readNextLine();
     }
 
