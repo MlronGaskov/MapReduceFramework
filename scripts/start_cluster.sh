@@ -9,8 +9,10 @@ cp "mr-app/build/libs/mr-app-1.0.jar" "./scripts"
 
 cd "./scripts"
 
-docker compose down --rmi all --volumes --remove-orphans
+docker compose stop coordinator worker
 
-docker compose up --scale worker=$WORKERS_COUNT
+docker compose rm -f coordinator worker
+
+docker compose up --build --scale worker=$WORKERS_COUNT
 
 echo "Cluster started successfully!"
