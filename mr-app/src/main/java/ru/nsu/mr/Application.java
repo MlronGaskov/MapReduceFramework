@@ -52,50 +52,60 @@ public class Application {
     }
 
     public static void main(String[] args) {
-        if (args.length < 1) {
+        String logsDestination = "./logs";
+        int index = 0;
+
+        if (args.length >= 2 && args[0].equals("--logs")) {
+            logsDestination = args[1];
+            index = 2;
+        }
+
+        if (args.length - index < 1) {
             System.err.println("Usage: java -jar app.jar <mode> [other args]");
             System.exit(1);
         }
-        String mode = args[0];
+
+        String mode = args[index];
         try {
             if ("coordinator".equalsIgnoreCase(mode)) {
                 Coordinator coordinator;
                 String configFile = null;
                 String baseUrl;
 
-                if (args.length == 1) {
+                if (args.length - index == 1) {
                     baseUrl = autoAssignBaseUrl();
-                } else if (args.length == 2) {
-                    if (args[1].endsWith(".yaml")) {
-                        configFile = args[1];
+                } else if (args.length - index == 2) {
+                    if (args[index + 1].endsWith(".yaml")) {
+                        configFile = args[index + 1];
                         baseUrl = autoAssignBaseUrl();
                     } else {
-                        baseUrl = args[1];
+                        baseUrl = args[index + 1];
                     }
                 } else {
-                    configFile = args[1];
-                    baseUrl = args[2];
+                    configFile = args[index + 1];
+                    baseUrl = args[index + 2];
                 }
 
-                coordinator = new Coordinator(baseUrl);
+                coordinator = new Coordinator(baseUrl, logsDestination);
                 if (configFile != null) {
                     coordinator.setJobConfiguration(configFile);
                 }
                 System.out.println("Coordinator started at " + baseUrl);
                 coordinator.start();
             } else if ("worker".equalsIgnoreCase(mode)) {
-                if (args.length < 2) {
+                if (args.length - index < 2) {
                     System.err.println("Usage: java -jar app.jar worker <coordinatorBaseUrl> [workerBaseUrl]");
                     System.exit(1);
                 }
-                String coordinatorBaseUrl = args[1];
+                String coordinatorBaseUrl = args[index + 1];
                 String workerBaseUrl;
-                if (args.length >= 3) {
-                    workerBaseUrl = args[2];
+                if (args.length - index >= 3) {
+                    workerBaseUrl = args[index + 2];
                 } else {
                     workerBaseUrl = autoAssignBaseUrl();
                 }
-                Worker worker = new Worker(coordinatorBaseUrl, workerBaseUrl, "./logs");
+
+                Worker worker = new Worker(coordinatorBaseUrl, workerBaseUrl, logsDestination);
                 System.out.println("Worker started at " + workerBaseUrl + " connecting to coordinator at " + coordinatorBaseUrl);
                 worker.start();
             } else {
@@ -103,6 +113,7 @@ public class Application {
                 System.exit(1);
             }
         } catch (Exception e) {
+            e.fillInStackTrace();
             System.exit(1);
         }
     }

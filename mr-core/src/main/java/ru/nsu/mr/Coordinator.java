@@ -1,5 +1,7 @@
 package ru.nsu.mr;
 
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.layout.JsonLayout;
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.CoordinatorEndpoint;
@@ -20,8 +22,10 @@ import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFact
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.layout.PatternLayout;
+import org.apache.logging.log4j.core.appender.HttpAppender;
 import java.io.IOException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -94,9 +98,12 @@ public class Coordinator {
         }
     }
 
-    public Coordinator(String coordinatorBaseUrl) throws IOException {
+    public Coordinator(String coordinatorBaseUrl, String logDestination) throws IOException {
         this.coordinatorBaseUrl = coordinatorBaseUrl;
-        configureLogging();
+        try {
+            configureLogging(logDestination);
+        } catch (URISyntaxException ignored) {
+        }
         endpoint = new CoordinatorEndpoint(
                 coordinatorBaseUrl,
                 this::registerWorker,
@@ -374,17 +381,20 @@ public class Coordinator {
         }
     }
 
-    private void configureLogging() throws IOException {
+    private void configureLogging(String logDestination) throws IOException, URISyntaxException {
         synchronized (lock) {
+            boolean logToEs = logDestination.startsWith("http://") || logDestination.startsWith("https://");
             String sanitizedCoordinatorId = coordinatorBaseUrl
                     .replaceAll("https?://", "")
                     .replaceAll("[^a-zA-Z0-9.-]", "_");
 
-            Path logPath = Path.of("./logs");
-            if (Files.exists(logPath)) {
-                deleteDirectory(logPath);
+            Path logPath = Path.of(logDestination);
+            if (!logToEs) {
+                if (Files.exists(logPath)) {
+                    deleteDirectory(logPath);
+                }
+                Files.createDirectories(logPath);
             }
-            Files.createDirectories(logPath);
 
             String logFileName = String.format("logs-coordinator-%s.log", sanitizedCoordinatorId);
             Path logFile = logPath.resolve(logFileName);
@@ -399,28 +409,40 @@ public class Coordinator {
                 context.start(builder.build());
             }
 
-            String appenderName = "FileAppender-" + sanitizedCoordinatorId;
-            FileAppender fileAppender = FileAppender.newBuilder()
-                    .setName(appenderName)
-                    .withFileName(logFile.toString())
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            fileAppender.start();
-            context.getConfiguration().addAppender(fileAppender);
-            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+            if (logToEs) {
+                Appender elasticAppender = HttpAppender.newBuilder()
+                        .setName("ElasticHttpAppender-" + sanitizedCoordinatorId)
+                        .setConfiguration(context.getConfiguration())
+                        .setUrl(new URI(logDestination).toURL())
+                        .setLayout(JsonLayout.createDefaultLayout())
+                        .build();
+                elasticAppender.start();
+                context.getConfiguration().addAppender(elasticAppender);
+                context.getConfiguration().getRootLogger().addAppender(elasticAppender, Level.INFO, null);
+            } else {
+                String appenderName = "FileAppender-" + sanitizedCoordinatorId;
+                FileAppender fileAppender = FileAppender.newBuilder()
+                        .setName(appenderName)
+                        .withFileName(logFile.toString())
+                        .setLayout(PatternLayout.newBuilder()
+                                .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                                .build())
+                        .build();
+                fileAppender.start();
+                context.getConfiguration().addAppender(fileAppender);
+                context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
 
-            String consoleAppenderName = "ConsoleAppender";
-            ConsoleAppender consoleAppender = ConsoleAppender.newBuilder()
-                    .setName(consoleAppenderName)
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            consoleAppender.start();
-            context.getConfiguration().addAppender(consoleAppender);
-            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+                String consoleAppenderName = "ConsoleAppender";
+                ConsoleAppender consoleAppender = ConsoleAppender.newBuilder()
+                        .setName(consoleAppenderName)
+                        .setLayout(PatternLayout.newBuilder()
+                                .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                                .build())
+                        .build();
+                consoleAppender.start();
+                context.getConfiguration().addAppender(consoleAppender);
+                context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+            }
 
             context.updateLoggers();
             LOGGER = LogManager.getLogger("coordinator-" + sanitizedCoordinatorId);

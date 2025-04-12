@@ -2,11 +2,11 @@
 set -e
 
 MINIO_ALIAS="minio"
-MINIO_ENDPOINT="http://localhost:9000"
+MINIO_ENDPOINT="http://127.0.0.1:9000"
 MINIO_ACCESS_KEY="minioadmin"
 MINIO_SECRET_KEY="minioadmin"
 BUCKET_NAME="jobs"
-COORDINATOR_URL="http://localhost:8080"
+COORDINATOR_URL="http://127.0.0.1:8080"
 
 if ! command -v mc &> /dev/null; then
     echo "Error: mc (MinIO Client) is not installed. Please install mc and try again."
