@@ -386,44 +386,6 @@ public class Coordinator {
         }
     }
 
-    private void checkAllWorkersHealth() {
-        List<ConnectedWorker> currentWorkers;
-        synchronized (this) {
-            currentWorkers = new ArrayList<>(workers);
-        }
-
-        for (ConnectedWorker w : currentWorkers) {
-            try {
-                if (!isWorkerAlive(w)) {
-                    LOGGER.warn("Worker {} is considered DEAD. Reassigning task.",
-                            w.workerBaseUrl);
-                    handleDeadWorker(w);
-                }
-            } catch (Exception e) {
-                LOGGER.error("Error in heartbeat check for worker {}",
-                        w.workerBaseUrl, e);
-            }
-        }
-    }
-
-    private boolean isWorkerAlive(ConnectedWorker worker) {
-        return worker.getGateway().isAlive();
-    }
-
-    private synchronized void handleDeadWorker(ConnectedWorker worker) {
-        workers.remove(worker);
-        NewTaskDetails assignedTask = worker.getCurrentTaskDetails();
-        if (assignedTask != null) {
-            if (assignedTask.taskInformation().taskType() == TaskType.MAP) {
-                mapTaskQueue.add(assignedTask);
-            } else {
-                reduceTaskQueue.add(assignedTask);
-            }
-            worker.release();
-        }
-        distributeTasks();
-    }
-
     private void configureLogging(String logDestination) throws IOException, URISyntaxException {
         synchronized (lock) {
             boolean logToEs = logDestination.startsWith("http://") || logDestination.startsWith("https://");
