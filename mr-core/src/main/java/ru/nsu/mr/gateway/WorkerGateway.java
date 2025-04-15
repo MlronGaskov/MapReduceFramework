@@ -5,7 +5,11 @@ import ru.nsu.mr.endpoints.dto.TaskDetails;
 import ru.nsu.mr.endpoints.dto.TaskStatusInfo;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
@@ -46,15 +50,17 @@ public class WorkerGateway {
 
     public boolean isAlive() {
         try {
-            String response = HttpUtils.sendGetRequest(
-                    httpClient,
-                    workerBaseUrl + "/health",
-                    String.class,
-                    "Failed to get health status");
-            return "OK".equalsIgnoreCase(response);
-        } catch (Exception e) {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(workerBaseUrl + "/health"))
+                    .timeout(Duration.ofMillis(2000))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            return response.statusCode() == 200 && "OK".equalsIgnoreCase(response.body());
+        } catch (IOException | InterruptedException e) {
             return false;
         }
     }
-
 }

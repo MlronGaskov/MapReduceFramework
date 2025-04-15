@@ -90,7 +90,9 @@ public class Application {
                 if (configFile != null) {
                     coordinator.setJobConfiguration(configFile);
                 }
+              
                 System.out.println("Coordinator started at " + baseUrl);
+              
                 coordinator.start();
             } else if ("worker".equalsIgnoreCase(mode)) {
                 if (args.length - index < 2) {

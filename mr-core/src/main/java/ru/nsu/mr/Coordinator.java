@@ -52,6 +52,7 @@ public class Coordinator {
     private final Queue<NewTaskDetails> mapTaskQueue = new ConcurrentLinkedQueue<>();
     private final Queue<NewTaskDetails> reduceTaskQueue = new ConcurrentLinkedQueue<>();
     private Configuration jobConfig;
+
     private Phase currentPhase;
     private int finishedMappersCount;
     private int finishedReducersCount;
@@ -110,7 +111,7 @@ public class Coordinator {
                 this::receiveTaskCompletion,
                 this::submitJob);
         endpoint.startServer();
-      
+
         heartbeatScheduler.scheduleAtFixedRate(
                 this::checkAllWorkersHealth,
                 HEARTBEAT_PERIOD_MS,
@@ -196,8 +197,8 @@ public class Coordinator {
                 mapTaskQueue.add(newTask);
             }
         } catch (Exception e) {
-            LOGGER.error("Error while creating MAP tasks: {}", e.getMessage());
-            throw new RuntimeException(e);
+            LOGGER.error("Error while creating MAP tasks", e);
+            throw new RuntimeException("Failed to create MAP tasks", e);
         }
         for (int i = 0; i < reducersCount; i++) {
             List<String> reduceInputs = new ArrayList<>();
@@ -218,6 +219,10 @@ public class Coordinator {
         distributeTasks();
         waitForJobEnd();
         Thread.sleep(1000);
+      
+        heartbeatScheduler.shutdownNow();
+        endpoint.stopServer();
+      
         LOGGER.info("Job has finished successfully.");
     }
 
@@ -397,6 +402,7 @@ public class Coordinator {
             }
 
             String logFileName = String.format("logs-coordinator-%s.log", sanitizedCoordinatorId);
+
             Path logFile = logPath.resolve(logFileName);
 
             if (!isConfigured) {
