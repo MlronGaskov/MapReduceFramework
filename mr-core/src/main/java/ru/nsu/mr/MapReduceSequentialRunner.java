@@ -47,7 +47,7 @@ public class MapReduceSequentialRunner implements MapReduceRunner {
             List<Path> interFilesToReduce = new ArrayList<>();
             for (int k = 0; k < mappersCount; ++k) {
                 interFilesToReduce.add(
-                        mappersOutputDirectory.resolve("mapper-output-" + k + "-" + i + ".txt"));
+                        mappersOutputDirectory.resolve("mapper-output-" + k + "-" + i + ".zip"));
             }
             try {
                 MapReduceTasksRunner.executeReduceTask(

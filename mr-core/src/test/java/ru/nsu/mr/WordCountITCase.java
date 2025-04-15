@@ -17,6 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 class WordCountITCase {
     private Path reducersOutputPath;
@@ -110,7 +112,7 @@ class WordCountITCase {
         for (int i = 0; i < mappersCount; ++i) {
             for (int j = 0; j < reducersCount; ++j) {
                 readResult(
-                        mappersOutputPath.toString() + "/mapper-output-" + i + "-" + j + ".txt",
+                        mappersOutputPath.toString() + "/mapper-output-" + i + "-" + j + ".zip",
                         mappersResult);
             }
         }
@@ -130,7 +132,25 @@ class WordCountITCase {
     }
 
     public static void readResult(String filename, Map<String, Integer> result) throws IOException {
-        BufferedReader reader = new BufferedReader(new FileReader(filename));
+        if (filename.endsWith(".zip")) {
+            try (ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream(filename))) {
+                ZipEntry entry = zipInputStream.getNextEntry();
+                if (entry == null) {
+                    throw new IOException("ZIP archive is empty: " + filename);
+                }
+
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(zipInputStream))) {
+                    readLinesIntoMap(reader, result);
+                }
+            }
+        } else {
+            try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+                readLinesIntoMap(reader, result);
+            }
+        }
+    }
+
+    private static void readLinesIntoMap(BufferedReader reader, Map<String, Integer> result) throws IOException {
         String line;
         while ((line = reader.readLine()) != null) {
             String[] parts = line.split(" ");

@@ -78,8 +78,8 @@ public class SortedFileSink<K, V> implements FileSystemSink<K, V> {
             dumpsIterators.add(dumpIterator);
         }
 
-        try (FileSink<K, V> outputFileSink =
-                        new FileSink<>(keySerializer, valueSerializer, outputPath);
+        try (ZipFileSink<K, V> outputFileSink =
+                        new ZipFileSink<>(keySerializer, valueSerializer, outputPath);
                 MergedKeyValueIterator<K, V> mergedDumps =
                         new MergedKeyValueIterator<>(dumpsIterators, comparator)) {
             while (mergedDumps.hasNext()) {
