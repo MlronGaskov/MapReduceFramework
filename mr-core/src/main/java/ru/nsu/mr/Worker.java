@@ -9,6 +9,8 @@ import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
+import org.apache.logging.log4j.core.appender.HttpAppender;
+import org.apache.logging.log4j.core.layout.JsonLayout;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
@@ -20,6 +22,10 @@ import ru.nsu.mr.storages.StorageProviderFactory;
 import ru.nsu.mr.endpoints.WorkerEndpoint.TaskService;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -95,7 +101,10 @@ public class Worker {
         TaskService taskService = new InMemoryTaskService();
         this.workerEndpoint = new WorkerEndpoint(workerBaseUrl, taskService);
         workerEndpoint.startServer();
-        configureLogging(logsPath);
+        try {
+            configureLogging(logsPath);
+        } catch (URISyntaxException ignored) {
+        }
     }
 
     synchronized void setJob(MapReduceJob<?, ?, ?, ?> job, Configuration jobConfiguration) {
@@ -168,19 +177,12 @@ public class Worker {
         return result;
     }
 
-    private void configureLogging(String logsPath) {
+    private void configureLogging(String logDestination) throws MalformedURLException, URISyntaxException {
         synchronized (logLock) {
-            Path logDir = Path.of(logsPath);
-            if (logDir.toString().isEmpty()) {
-                throw new IllegalArgumentException("Log path is not set in configuration.");
-            }
-
+            boolean logToEs = logDestination.startsWith("http://") || logDestination.startsWith("https://");
             String sanitizedWorkerId = workerBaseUrl
                     .replaceAll("https?://", "")
                     .replaceAll("[^a-zA-Z0-9.-]", "_");
-
-            String logFileName = String.format("logs-worker-%s.log", sanitizedWorkerId);
-            Path logFile = logDir.resolve(logFileName);
 
             if (!loggingConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
@@ -192,26 +194,47 @@ public class Worker {
                 loggerContext.start(builder.build());
             }
 
-            Appender fileAppender = FileAppender.newBuilder()
-                    .setName("FileAppender-" + sanitizedWorkerId)
-                    .withFileName(logFile.toString())
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            fileAppender.start();
-            loggerContext.getConfiguration().addAppender(fileAppender);
-            loggerContext.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+            if (logToEs) {
+                URL elasticUrl = new URI(logDestination).toURL();
+                Appender elasticAppender = HttpAppender.newBuilder()
+                        .setName("ElasticHttpAppender-" + sanitizedWorkerId)
+                        .setConfiguration(loggerContext.getConfiguration())
+                        .setUrl(elasticUrl)
+                        .setLayout(JsonLayout.createDefaultLayout())
+                        .build();
+                elasticAppender.start();
+                loggerContext.getConfiguration().addAppender(elasticAppender);
+                loggerContext.getConfiguration().getRootLogger().addAppender(elasticAppender, Level.INFO, null);
+            } else {
+                Path logDir = Path.of(logDestination);
+                if (logDir.toString().isEmpty()) {
+                    throw new IllegalArgumentException("Log path is not set in configuration.");
+                }
 
-            Appender consoleAppender = ConsoleAppender.newBuilder()
-                    .setName("ConsoleAppender")
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            consoleAppender.start();
-            loggerContext.getConfiguration().addAppender(consoleAppender);
-            loggerContext.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+                String logFileName = String.format("logs-worker-%s.log", sanitizedWorkerId);
+                Path logFile = logDir.resolve(logFileName);
+
+                Appender fileAppender = FileAppender.newBuilder()
+                        .setName("FileAppender-" + sanitizedWorkerId)
+                        .withFileName(logFile.toString())
+                        .setLayout(PatternLayout.newBuilder()
+                                .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                                .build())
+                        .build();
+                fileAppender.start();
+                loggerContext.getConfiguration().addAppender(fileAppender);
+                loggerContext.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+
+                Appender consoleAppender = ConsoleAppender.newBuilder()
+                        .setName("ConsoleAppender")
+                        .setLayout(PatternLayout.newBuilder()
+                                .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                                .build())
+                        .build();
+                consoleAppender.start();
+                loggerContext.getConfiguration().addAppender(consoleAppender);
+                loggerContext.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+            }
 
             loggerContext.updateLoggers();
             LOGGER = LogManager.getLogger("worker-" + sanitizedWorkerId);

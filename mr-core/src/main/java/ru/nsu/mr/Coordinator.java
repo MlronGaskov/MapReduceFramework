@@ -1,5 +1,7 @@
 package ru.nsu.mr;
 
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.layout.JsonLayout;
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.CoordinatorEndpoint;
@@ -20,7 +22,10 @@ import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFact
 import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.layout.PatternLayout;
+import org.apache.logging.log4j.core.appender.HttpAppender;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -47,12 +52,18 @@ public class Coordinator {
     private final Queue<NewTaskDetails> mapTaskQueue = new ConcurrentLinkedQueue<>();
     private final Queue<NewTaskDetails> reduceTaskQueue = new ConcurrentLinkedQueue<>();
     private Configuration jobConfig;
-    private Phase currentPhase = Phase.MAP;
-    private int finishedMappersCount = 0;
-    private int finishedReducersCount = 0;
+
+    private Phase currentPhase;
+    private int finishedMappersCount;
+    private int finishedReducersCount;
+  
     private static final long HEARTBEAT_PERIOD_MS = 5000;
     private static final long HEARTBEAT_TIMEOUT_MS = 2000;
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
+
+    private final Object jobLock = new Object();
+    private volatile boolean busy = false;
+    private volatile Configuration pendingJob = null;
 
     private static class ConnectedWorker {
         private final String workerBaseUrl;
@@ -82,16 +93,23 @@ public class Coordinator {
         public synchronized NewTaskDetails getCurrentTaskDetails() {
             return currentTaskDetails;
         }
-
+      
         public synchronized WorkerGateway getGateway() {
             return gateway;
         }
     }
 
-    public Coordinator(String coordinatorBaseUrl) throws IOException {
+    public Coordinator(String coordinatorBaseUrl, String logDestination) throws IOException {
         this.coordinatorBaseUrl = coordinatorBaseUrl;
-        configureLogging();
-        endpoint = new CoordinatorEndpoint(coordinatorBaseUrl, this::registerWorker, this::receiveTaskCompletion);
+        try {
+            configureLogging(logDestination);
+        } catch (URISyntaxException ignored) {
+        }
+        endpoint = new CoordinatorEndpoint(
+                coordinatorBaseUrl,
+                this::registerWorker,
+                this::receiveTaskCompletion,
+                this::submitJob);
         endpoint.startServer();
 
         heartbeatScheduler.scheduleAtFixedRate(
@@ -115,10 +133,24 @@ public class Coordinator {
         setJobConfiguration(config);
     }
 
-    public void start() throws InterruptedException {
-        if (jobConfig == null) {
-            throw new IllegalStateException("Job configuration not set.");
+    public void submitJob(Configuration job) {
+        if (busy) {
+            throw new IllegalStateException("Coordinator is busy");
         }
+        synchronized (jobLock) {
+            pendingJob = job;
+            busy = true;
+            jobLock.notifyAll();
+        }
+    }
+
+    private void executeJob() throws InterruptedException {
+        currentPhase = Phase.MAP;
+        finishedMappersCount = 0;
+        finishedReducersCount = 0;
+        mapTaskQueue.clear();
+        reduceTaskQueue.clear();
+
         LOGGER.info("Starting job with configuration: JOB_PATH={}, MAPPERS_COUNT={}, REDUCERS_COUNT={}",
                 jobConfig.get(ConfigurationOption.JOB_PATH),
                 jobConfig.get(ConfigurationOption.MAPPERS_COUNT),
@@ -144,7 +176,7 @@ public class Coordinator {
         try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(dataStorageConnectionString)) {
             List<String> inputFiles = storageProvider.list(inputsPath);
             int totalInputs = inputFiles.size();
-            LOGGER.info("Found {} input files in {}", inputFiles.size(), inputsPath);
+            LOGGER.info("Found {} input files in {}\n {}", inputFiles.size(), inputsPath, inputFiles);
             int processed = 0;
             for (int i = 0; i < mappersCount; i++) {
                 int count = (totalInputs - processed) / (mappersCount - i);
@@ -184,11 +216,46 @@ public class Coordinator {
             reduceTaskQueue.add(newTask);
             LOGGER.info("Created REDUCE task {} with {} input files", mappersCount + i, reduceInputs.size());
         }
+        distributeTasks();
         waitForJobEnd();
         Thread.sleep(1000);
+      
         heartbeatScheduler.shutdownNow();
         endpoint.stopServer();
+      
         LOGGER.info("Job has finished successfully.");
+    }
+
+
+    public void start() throws InterruptedException {
+        if (jobConfig != null) {
+            executeJob();
+            Thread.sleep(1000);
+            endpoint.stopServer();
+            heartbeatScheduler.shutdownNow();
+        } else {
+            LOGGER.info("Starting job without initial configuration.");
+            while (!Thread.currentThread().isInterrupted()) {
+                synchronized (jobLock) {
+                    LOGGER.info("Waiting for job.");
+                    while (pendingJob == null) {
+                        jobLock.wait();
+                    }
+                    this.jobConfig = pendingJob;
+                    pendingJob = null;
+                }
+                try {
+                    executeJob();
+                } catch (Exception e) {
+                    LOGGER.error("Job execution failed: {}", e.getMessage());
+                } finally {
+                    synchronized (jobLock) {
+                        busy = false;
+                        jobConfig = null;
+                    }
+                }
+            }
+        }
     }
 
     private synchronized void registerWorker(String workerBaseUrl) {
@@ -196,10 +263,12 @@ public class Coordinator {
         workers.add(worker);
         distributeTasks();
         notifyAll();
+        LOGGER.info("Worker registered, on {}.", workerBaseUrl);
     }
 
     private synchronized void receiveTaskCompletion(TaskDetails details) {
         if ("SUCCEED".equals(details.status())) {
+            LOGGER.info("Task completed, on {}.", details.taskInformation().taskId());
             if (details.taskInformation().taskType() == TaskType.MAP) {
                 finishedMappersCount++;
                 if (finishedMappersCount == jobConfig.get(ConfigurationOption.MAPPERS_COUNT)) {
@@ -273,6 +342,44 @@ public class Coordinator {
         }
     }
 
+    private void checkAllWorkersHealth() {
+        List<ConnectedWorker> currentWorkers;
+        synchronized (this) {
+            currentWorkers = new ArrayList<>(workers);
+        }
+
+        for (ConnectedWorker w : currentWorkers) {
+            try {
+                if (!isWorkerAlive(w)) {
+                    LOGGER.warn("Worker {} is considered DEAD. Reassigning task.",
+                            w.workerBaseUrl);
+                    handleDeadWorker(w);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Error in heartbeat check for worker {}",
+                        w.workerBaseUrl, e);
+            }
+        }
+    }
+
+    private boolean isWorkerAlive(ConnectedWorker worker) {
+        return worker.getGateway().isAlive();
+    }
+
+    private synchronized void handleDeadWorker(ConnectedWorker worker) {
+        workers.remove(worker);
+        NewTaskDetails assignedTask = worker.getCurrentTaskDetails();
+        if (assignedTask != null) {
+            if (assignedTask.taskInformation().taskType() == TaskType.MAP) {
+                mapTaskQueue.add(assignedTask);
+            } else {
+                reduceTaskQueue.add(assignedTask);
+            }
+            worker.release();
+        }
+        distributeTasks();
+    }
+
     private synchronized void waitForJobEnd() throws InterruptedException {
         while (currentPhase != Phase.JOB_ENDED) {
             wait();
@@ -317,17 +424,20 @@ public class Coordinator {
         distributeTasks();
     }
 
-    private void configureLogging() throws IOException {
+    private void configureLogging(String logDestination) throws IOException, URISyntaxException {
         synchronized (lock) {
+            boolean logToEs = logDestination.startsWith("http://") || logDestination.startsWith("https://");
             String sanitizedCoordinatorId = coordinatorBaseUrl
                     .replaceAll("https?://", "")
                     .replaceAll("[^a-zA-Z0-9.-]", "_");
 
-            Path logPath = Path.of("./logs");
-            if (Files.exists(logPath)) {
-                deleteDirectory(logPath);
+            Path logPath = Path.of(logDestination);
+            if (!logToEs) {
+                if (Files.exists(logPath)) {
+                    deleteDirectory(logPath);
+                }
+                Files.createDirectories(logPath);
             }
-            Files.createDirectories(logPath);
 
             String logFileName = String.format("logs-coordinator-%s.log", sanitizedCoordinatorId);
 
@@ -343,28 +453,40 @@ public class Coordinator {
                 context.start(builder.build());
             }
 
-            String appenderName = "FileAppender-" + sanitizedCoordinatorId;
-            FileAppender fileAppender = FileAppender.newBuilder()
-                    .setName(appenderName)
-                    .withFileName(logFile.toString())
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            fileAppender.start();
-            context.getConfiguration().addAppender(fileAppender);
-            context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
+            if (logToEs) {
+                Appender elasticAppender = HttpAppender.newBuilder()
+                        .setName("ElasticHttpAppender-" + sanitizedCoordinatorId)
+                        .setConfiguration(context.getConfiguration())
+                        .setUrl(new URI(logDestination).toURL())
+                        .setLayout(JsonLayout.createDefaultLayout())
+                        .build();
+                elasticAppender.start();
+                context.getConfiguration().addAppender(elasticAppender);
+                context.getConfiguration().getRootLogger().addAppender(elasticAppender, Level.INFO, null);
+            } else {
+                String appenderName = "FileAppender-" + sanitizedCoordinatorId;
+                FileAppender fileAppender = FileAppender.newBuilder()
+                        .setName(appenderName)
+                        .withFileName(logFile.toString())
+                        .setLayout(PatternLayout.newBuilder()
+                                .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                                .build())
+                        .build();
+                fileAppender.start();
+                context.getConfiguration().addAppender(fileAppender);
+                context.getConfiguration().getRootLogger().addAppender(fileAppender, Level.DEBUG, null);
 
-            String consoleAppenderName = "ConsoleAppender";
-            ConsoleAppender consoleAppender = ConsoleAppender.newBuilder()
-                    .setName(consoleAppenderName)
-                    .setLayout(PatternLayout.newBuilder()
-                            .withPattern("%d [%t] %-5level: %msg%n%throwable")
-                            .build())
-                    .build();
-            consoleAppender.start();
-            context.getConfiguration().addAppender(consoleAppender);
-            context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+                String consoleAppenderName = "ConsoleAppender";
+                ConsoleAppender consoleAppender = ConsoleAppender.newBuilder()
+                        .setName(consoleAppenderName)
+                        .setLayout(PatternLayout.newBuilder()
+                                .withPattern("%d [%t] %-5level: %msg%n%throwable")
+                                .build())
+                        .build();
+                consoleAppender.start();
+                context.getConfiguration().addAppender(consoleAppender);
+                context.getConfiguration().getRootLogger().addAppender(consoleAppender, Level.INFO, null);
+            }
 
             context.updateLoggers();
             LOGGER = LogManager.getLogger("coordinator-" + sanitizedCoordinatorId);

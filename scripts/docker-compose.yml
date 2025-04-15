@@ -1,14 +1,14 @@
-version: '3.8'
 services:
   coordinator:
     build: .
+    depends_on:
+      - elasticsearch
+      - kibana
     container_name: coordinator
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
     ports:
       - "8080:8080"
     command: >
-      java -jar mr-app-1.0.jar coordinator /app/config.yaml http://coordinator:8080
+      sh -c "sleep 20 && java -jar mr-app-1.0.jar --logs http://elasticsearch:9200/mr-logs-index/_doc coordinator http://coordinator:8080"
     networks:
       - mrnet
 
@@ -16,8 +16,62 @@ services:
     build: .
     depends_on:
       - coordinator
+      - elasticsearch
+      - kibana
     command: >
-      sh -c "sleep 3 && java -jar mr-app-1.0.jar worker http://coordinator:8080 http://$(hostname):8090"
+      sh -c "sleep 23 && java -jar mr-app-1.0.jar --logs http://elasticsearch:9200/mr-logs-index/_doc worker http://coordinator:8080 http://$(hostname):8090"
+    networks:
+      - mrnet
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - mrnet
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      sh -c "until mc alias set myminio http://minio:9000 minioadmin minioadmin 2>/dev/null; do
+               echo 'Waiting for MinIO...';
+               sleep 2;
+             done;
+             echo 'MinIO alias set successfully.';
+             mc mb myminio/jobs || true"
+    networks:
+      - mrnet
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - mrnet
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.7.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
     networks:
       - mrnet
 
@@ -25,3 +79,6 @@ networks:
   mrnet:
     driver: bridge
 
+volumes:
+  minio_data:
+  es_data:
