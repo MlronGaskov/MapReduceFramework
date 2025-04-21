@@ -100,4 +100,14 @@ public class S3StorageProvider implements StorageProvider {
             s3Client.close();
         }
     }
+
+    @Override
+    public long getFileSize(String key) throws IOException {
+        try {
+            return s3Client.headObject(builder -> builder.bucket(bucketName).key(key))
+                    .contentLength();
+        } catch (Exception e) {
+            throw new IOException("Failed to get file size from S3", e);
+        }
+    }
 }

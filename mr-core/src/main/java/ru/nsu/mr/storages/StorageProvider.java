@@ -8,4 +8,5 @@ public interface StorageProvider extends AutoCloseable {
     void get(String key, Path destination) throws IOException;
     void put(Path source, String key) throws IOException;
     List<String> list(String key) throws IOException;
+    long getFileSize(String key) throws IOException;  // Добавленный метод
 }

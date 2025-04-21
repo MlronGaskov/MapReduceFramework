@@ -64,6 +64,16 @@ public class Coordinator {
     private volatile boolean busy = false;
     private volatile Configuration pendingJob = null;
 
+    private static class FileSizePair {
+        final String filename;
+        final long size;
+
+        FileSizePair(String filename, long size) {
+            this.filename = filename;
+            this.size = size;
+        }
+    }
+
     private static class ConnectedWorker {
         private final String workerBaseUrl;
         private final WorkerGateway gateway;
@@ -164,6 +174,7 @@ public class Coordinator {
         int mappersCount = jobConfig.get(ConfigurationOption.MAPPERS_COUNT);
         int reducersCount = jobConfig.get(ConfigurationOption.REDUCERS_COUNT);
         int sorterInMemoryRecords = jobConfig.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS);
+
         JobInformation jobInformation = new JobInformation(
                 1,
                 jobPath,
@@ -172,26 +183,75 @@ public class Coordinator {
                 reducersCount,
                 sorterInMemoryRecords
         );
+
         try (StorageProvider storageProvider = StorageProviderFactory.getStorageProvider(dataStorageConnectionString)) {
             List<String> inputFiles = storageProvider.list(inputsPath);
-            int totalInputs = inputFiles.size();
-            LOGGER.info("Found {} input files in {}\n {}", inputFiles.size(), inputsPath, inputFiles);
-            int processed = 0;
+            LOGGER.info("Found {} input files in {}", inputFiles.size(), inputsPath);
+
+            // Получаем размеры всех файлов
+            List<Long> fileSizes = new ArrayList<>();
+            long totalSize = 0;
+            for (String file : inputFiles) {
+                long size = storageProvider.getFileSize(file);
+                fileSizes.add(size);
+                totalSize += size;
+                LOGGER.debug("File: {}, Size: {} bytes", file, size); // Логирование размера каждого файла
+            }
+
+            // Размер данных на один маппер
+            long targetSizePerMapper = totalSize / mappersCount;
+            LOGGER.info("Total data size: {} bytes, target per mapper: {} bytes", totalSize, targetSizePerMapper);
+
+            // Распределяем файлы по мапперам с учетом размера
+            List<List<String>> mapperFiles = new ArrayList<>();
+            List<Long> mapperSizes = new ArrayList<>();
             for (int i = 0; i < mappersCount; i++) {
-                int count = (totalInputs - processed) / (mappersCount - i);
-                List<String> filesForTask = new ArrayList<>();
-                for (int j = 0; j < count; j++) {
-                    filesForTask.add(inputFiles.get(processed + j));
+                mapperFiles.add(new ArrayList<>());
+                mapperSizes.add(0L);
+            }
+
+            // Сортируем файлы по убыванию размера (чтобы сначала распределять самые большие)
+            List<FileSizePair> sortedFiles = new ArrayList<>();
+            for (int i = 0; i < inputFiles.size(); i++) {
+                sortedFiles.add(new FileSizePair(inputFiles.get(i), fileSizes.get(i)));
+            }
+            sortedFiles.sort((a, b) -> Long.compare(b.size, a.size));
+
+            // Распределяем файлы
+            for (FileSizePair filePair : sortedFiles) {
+                String file = filePair.filename;
+                long fileSize = filePair.size;
+
+                // Находим маппер с наименьшим текущим размером данных
+                int bestMapper = 0;
+                long minSize = mapperSizes.get(0);
+                for (int j = 1; j < mappersCount; j++) {
+                    if (mapperSizes.get(j) < minSize) {
+                        minSize = mapperSizes.get(j);
+                        bestMapper = j;
+                    }
                 }
-                processed += count;
+
+                // Добавляем файл к выбранному мапперу
+                mapperFiles.get(bestMapper).add(file);
+                mapperSizes.set(bestMapper, mapperSizes.get(bestMapper) + fileSize);
+            }
+            // Создаем задачи для мапперов и логируем распределение файлов
+            for (int i = 0; i < mappersCount; i++) {
+                List<String> filesForMapper = mapperFiles.get(i);
                 TaskInformation taskInfo = new TaskInformation(
                         i,
                         TaskType.MAP,
-                        filesForTask,
+                        filesForMapper,
                         mappersOutputsPath,
                         dataStorageConnectionString
                 );
-                LOGGER.info("Created MAP task {} with {} files", i, filesForTask.size());
+
+                // Логирование файлов для каждого воркера
+                LOGGER.info("Created MAP task {} with {} files (total size: {} bytes)",
+                        i, filesForMapper.size(), mapperSizes.get(i));
+                LOGGER.info("Files for MAP task {}: {}", i, filesForMapper); // Добавленная строка
+
                 NewTaskDetails newTask = new NewTaskDetails(jobInformation, taskInfo);
                 mapTaskQueue.add(newTask);
             }
@@ -199,6 +259,7 @@ public class Coordinator {
             LOGGER.error("Error while creating MAP tasks: {}", e.getMessage());
             throw new RuntimeException(e);
         }
+
         for (int i = 0; i < reducersCount; i++) {
             List<String> reduceInputs = new ArrayList<>();
             for (int j = 0; j < mappersCount; j++) {
@@ -213,8 +274,9 @@ public class Coordinator {
             );
             NewTaskDetails newTask = new NewTaskDetails(jobInformation, taskInfo);
             reduceTaskQueue.add(newTask);
-            LOGGER.info("Created REDUCE task {} with {} input files", mappersCount + i, reduceInputs.size());
+            LOGGER.info("Created REDUCE task {} with input files: {}", mappersCount + i, reduceInputs);
         }
+
         distributeTasks();
         waitForJobEnd();
         Thread.sleep(1000);
