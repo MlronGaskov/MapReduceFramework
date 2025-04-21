@@ -108,4 +108,18 @@ public class MinIOStorageProvider implements StorageProvider {
     public void close() throws Exception {
 
     }
+
+    @Override
+    public long getFileSize(String key) throws IOException {
+        try {
+            return minioClient.statObject(
+                    io.minio.StatObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(key)
+                            .build()
+            ).size();
+        } catch (Exception e) {
+            throw new IOException("Failed to get file size from MinIO", e);
+        }
+    }
 }

@@ -49,4 +49,13 @@ public class LocalStorageProvider implements StorageProvider {
     public void close() throws Exception {
 
     }
+
+    @Override
+    public long getFileSize(String key) throws IOException {
+        Path filePath = Path.of(key);
+        if (!Files.exists(filePath)) {
+            throw new IOException("File not found: " + key);
+        }
+        return Files.size(filePath);
+    }
 }
