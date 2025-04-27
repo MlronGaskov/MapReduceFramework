@@ -219,10 +219,6 @@ public class Coordinator {
         distributeTasks();
         waitForJobEnd();
         Thread.sleep(1000);
-      
-        heartbeatScheduler.shutdownNow();
-        endpoint.stopServer();
-      
         LOGGER.info("Job has finished successfully.");
     }
 
