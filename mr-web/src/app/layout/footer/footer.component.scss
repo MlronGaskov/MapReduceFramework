@@ -1,0 +1,19 @@
+.footer {
+    padding: 0.5rem 1rem;
+    background: #fafafa;
+    font-size: 0.875rem;
+
+    .footer__inner {
+        display: flex;
+        align-items: center;
+    }
+
+    .spacer {
+        flex: 1 1 auto;
+    }
+
+    a {
+        text-decoration: none;
+        color: inherit;
+    }
+}  
