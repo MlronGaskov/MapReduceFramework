@@ -1,5 +1,5 @@
 import { HttpClient } from "@angular/common/http";
-import { Injectable } from "@angular/core";
+import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
 import { JobSummary } from './job-list/job-list-item/job-list-item.component';
@@ -46,7 +46,9 @@ export interface UploadJobRequest {
 export class JobService {
   private readonly api = "192.168.10.10:8080";
 
-  constructor(private readonly http: HttpClient) {}
+  http = inject(HttpClient);
+
+  //constructor(private readonly http: HttpClient) {}
 
   getJobs(): Observable<JobSummary[]> {
     return this.http.get<JobSummary[]>(`${this.api}/jobs`);

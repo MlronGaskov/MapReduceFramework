@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
+import { AsyncPipe } from '@angular/common';
 import { Observable } from 'rxjs';
 
 import { JobListItemComponent } from './job-list-item/job-list-item.component';
@@ -9,11 +10,15 @@ import { JobSummary } from './job-list-item/job-list-item.component';
 
 @Component({
   selector: 'app-job-list',
-  imports: [JobListItemComponent],
+  imports: [JobListItemComponent, AsyncPipe],
   templateUrl: './job-list.component.html',
   styleUrl: './job-list.component.scss'
 })
 export class JobListComponent {
+  ngOnInit(): void {
+    this.reload();
+  }
+
   jobs$: Observable<JobSummary[]>;
 
   constructor(
@@ -35,5 +40,9 @@ export class JobListComponent {
       next: () => console.log('Job deleted', jobId),
       error: err => console.error(err),
     });
+  }
+
+  reload(): void {
+    this.jobs$ = this.jobService.getJobs();
   }
 }

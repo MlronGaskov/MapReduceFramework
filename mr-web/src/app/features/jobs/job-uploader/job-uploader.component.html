@@ -1,0 +1,29 @@
+<mat-card class="uploader">
+    <mat-card-title>Submit new job</mat-card-title>
+  
+    <form [formGroup]="form" (ngSubmit)="upload()">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Job JAR URL</mat-label>
+        <input matInput formControlName="jobUrl" />
+        <mat-error *ngIf="form.controls.jobUrl.hasError('required')">
+          URL required
+        </mat-error>
+      </mat-form-field>
+  
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Job name</mat-label>
+        <input matInput formControlName="jobName" />
+        <mat-error *ngIf="form.controls.jobName.hasError('required')">
+          Name required
+        </mat-error>
+      </mat-form-field>
+  
+      <button
+        mat-raised-button
+        color="primary"
+        type="submit"
+        [disabled]="isSubmitting || form.invalid">
+        {{ isSubmitting ? 'Uploading…' : 'Upload' }}
+      </button>
+    </form>
+  </mat-card>  

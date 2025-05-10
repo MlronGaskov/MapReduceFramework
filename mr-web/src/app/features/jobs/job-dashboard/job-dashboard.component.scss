@@ -1,0 +1,25 @@
+.dashboard {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+  
+    /* если экран узкий – в столбик */
+    @media (max-width: 900px) {
+      grid-template-columns: 1fr;
+    }
+  
+    .jobs {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+  
+      h3 {
+        margin: 0 0 0.5rem 0;
+      }
+  
+      app-job-list {
+        flex: 1 1 auto;
+        overflow: hidden; /* внутри компонент уже имеет свой scroll */
+      }
+    }
+  }  
