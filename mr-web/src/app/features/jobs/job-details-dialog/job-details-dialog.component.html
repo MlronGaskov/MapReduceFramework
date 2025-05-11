@@ -18,10 +18,10 @@
 
     <ng-container *ngIf="(progress$ | async) as p">
         <table class="table">
-        <tr><th>Job status</th>         <td>{{ p.status }}</td></tr>
-        <tr><th>Current phase</th>      <td>{{ p.phase }}</td></tr>
-        <tr><th>Total tasks</th>        <td>{{ p.total }}</td></tr>
-        <tr><th>Completed tasks</th>    <td>{{ p.completed }}</td></tr>
+        <tr><th>Job status</th><td>{{ p.status }}</td></tr>
+        <tr><th>Current phase</th><td>{{ p.phase }}</td></tr>
+        <tr><th>Total tasks</th><td>{{ p.total }}</td></tr>
+        <tr><th>Completed tasks</th><td>{{ p.completed }}</td></tr>
         </table>
     </ng-container>
 </mat-dialog-content>

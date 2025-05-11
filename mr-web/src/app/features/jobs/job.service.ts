@@ -21,7 +21,7 @@ export interface JobInfo {
 }
 
 export interface JobProgress {
-  status:  'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  status:  'RUNNING' | 'FINISHED' | 'WAITING';
   phase:   'MAP' | 'REDUCE' | 'FINISHED';
 
   total: number;
@@ -30,43 +30,43 @@ export interface JobProgress {
 
 export interface UploadJobRequest {
   jobName: string;
-  userJar: string;
-  mainClass: string;
-  mappers: number;
-  reducers: number;
-  inputsPath: string;
-  outputsPath: string;
-
-  jobStorageType?:  'LOCAL' | 'CEPH' | 'S3' | 'YANDEX_CLOUD';
-  dataStorageType?: 'LOCAL' | 'CEPH' | 'S3' | 'YANDEX_CLOUD';
+  jobUrl: string;
 }
 
 
 @Injectable({ providedIn: "root" })
 export class JobService {
-  private readonly api = "192.168.10.10:8080";
-
   http = inject(HttpClient);
+  private coordinatorUrl = ''; 
 
-  //constructor(private readonly http: HttpClient) {}
+  setCoordinatorUrl(url: string): void {
+    this.coordinatorUrl = url.replace(/\/+$/, ''); // remove endings «/»
+  }
+
+  private api(path: string): string {
+    if (!this.coordinatorUrl) {
+      throw new Error('Coordinator URL not set');
+    }
+    return `${this.coordinatorUrl}${path}`;
+  }
 
   getJobs(): Observable<JobSummary[]> {
-    return this.http.get<JobSummary[]>(`${this.api}/jobs`);
+    return this.http.get<JobSummary[]>(this.api('/jobs'));
   }
 
   deleteJob(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.api}/jobs/${id}`);
+    return this.http.delete<void>(this.api(`/jobs/${id}`));
   }
 
   getJobInfo(id: number): Observable<JobInfo> {
-    return this.http.get<JobInfo>(`${this.api}/jobs/${id}`);
+    return this.http.get<JobInfo>(this.api(`/jobs/${id}`));
   }
 
   getProgress(id: number): Observable<JobProgress> {
-    return this.http.get<JobProgress>(`${this.api}/jobs/${id}/progress`);
+    return this.http.get<JobProgress>(this.api(`/jobs/${id}/progress`));
   }
 
   uploadJob(req: UploadJobRequest): Observable<{ jobId: number; uiUrl: string }> {
-    return this.http.post<{ jobId: number; uiUrl: string }>(`${this.api}/jobs`, req);
+    return this.http.post<{ jobId: number; uiUrl: string }>(this.api('/jobs'), req);
   }
 }

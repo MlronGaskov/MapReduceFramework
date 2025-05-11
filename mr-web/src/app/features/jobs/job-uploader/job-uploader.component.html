@@ -3,7 +3,15 @@
   
     <form [formGroup]="form" (ngSubmit)="upload()">
       <mat-form-field appearance="outline" class="full">
-        <mat-label>Job JAR URL</mat-label>
+        <mat-label>Coordinator URL (e.g. http://192.168.10.10:8080)</mat-label>
+        <input matInput formControlName="coordinatorUrl" />
+        <mat-error *ngIf="form.controls.coordinatorUrl.hasError('required')">
+          URL required
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Job URL</mat-label>
         <input matInput formControlName="jobUrl" />
         <mat-error *ngIf="form.controls.jobUrl.hasError('required')">
           URL required
@@ -26,4 +34,4 @@
         {{ isSubmitting ? 'Uploading…' : 'Upload' }}
       </button>
     </form>
-  </mat-card>  
+</mat-card>  

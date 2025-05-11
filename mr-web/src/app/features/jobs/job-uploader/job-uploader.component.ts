@@ -14,7 +14,6 @@ import { JobService, UploadJobRequest } from '../job.service';
   styleUrl: './job-uploader.component.scss'
 })
 export class JobUploaderComponent {
-  /** сообщаем родителю, что список нужно обновить */
   @Output() jobUploaded = new EventEmitter<void>();
 
   form!: FormGroup;
@@ -26,11 +25,11 @@ export class JobUploaderComponent {
     private readonly snack: MatSnackBar
   ) {
       this.form = this.fb.group({
+        coordinatorUrl: ['', [Validators.required]],
         jobUrl : ['', [Validators.required]],
         jobName: ['', [Validators.required, Validators.maxLength(40)]],
       });
   }
-
 
   upload(): void {
     if (this.form.invalid) {
@@ -38,14 +37,11 @@ export class JobUploaderComponent {
       return;
     }
 
+    this.jobService.setCoordinatorUrl(this.form.value.coordinatorUrl!);
+
     const req: UploadJobRequest = {
       jobName:  this.form.value.jobName!,
-      userJar:  this.form.value.jobUrl!,
-      mainClass: '',          // можно дать пользователю отдельное поле, упрощаем
-      mappers:   1,
-      reducers:  1,
-      inputsPath:  '',
-      outputsPath: '',
+      jobUrl:  this.form.value.jobUrl!
     };
 
     this.isSubmitting = true;
