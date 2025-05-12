@@ -56,11 +56,18 @@ public class CoordinatorEndpoint {
         this.onDeleteJob = onDeleteJob;
         this.onGetJobProgress = onGetJobProgress;
         this.onGetWorkerCount = onGetWorkerCount;
-        httpServer.createContext("/workers", new WorkerRegistrationHandler());
-        httpServer.createContext("/workers/count", new WorkersCountHandler());
-        httpServer.createContext("/notifyTask", new TaskNotificationHandler());
-        httpServer.createContext("/job", new JobSubmissionHandler());
-        httpServer.createContext("/jobs", new JobsQueryHandler());
+
+        CorsFilter cors = new CorsFilter();
+        httpServer.createContext("/workers",  new WorkerRegistrationHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/workers/count", new WorkersCountHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/notifyTask", new TaskNotificationHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/job", new JobSubmissionHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/jobs", new JobsQueryHandler())
+                .getFilters().add(cors);
     }
 
     public void startServer() {
