@@ -132,6 +132,7 @@ public class CoordinatorEndpoint {
             try {
                 NewJobDetails jobDetails = HttpUtils.readRequestBody(exchange, NewJobDetails.class);
                 Configuration jobConfig = new Configuration()
+                        .set(ConfigurationOption.JOB_NAME, jobDetails.jobName())
                         .set(ConfigurationOption.JOB_ID, jobDetails.jobId())
                         .set(ConfigurationOption.JOB_PATH, jobDetails.jobPath())
                         .set(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING, jobDetails.jobStorageConnectionString())

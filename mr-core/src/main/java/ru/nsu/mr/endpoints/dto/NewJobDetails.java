@@ -2,6 +2,7 @@ package ru.nsu.mr.endpoints.dto;
 
 public record NewJobDetails(
         int jobId,
+        String jobName,
         String jobPath,
         String jobStorageConnectionString,
         String inputsPath,
