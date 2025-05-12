@@ -3,9 +3,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { DatePipe } from '@angular/common';
 
 export interface JobSummary {
-  id: number;
-  name: string;
-  createdAt: string;
+  jobId: number;
+  jobName: string;
+  submissionTime: string;
 }
 
 @Component({

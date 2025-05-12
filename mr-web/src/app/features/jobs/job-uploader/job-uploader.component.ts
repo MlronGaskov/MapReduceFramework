@@ -6,10 +6,11 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 
 import { JobService, UploadJobRequest } from '../job.service';
+import { NgIf } from '@angular/common';
 
 @Component({
   selector: 'app-job-uploader',
-  imports: [MatCardModule, MatFormFieldModule, ReactiveFormsModule],
+  imports: [MatCardModule, MatFormFieldModule, ReactiveFormsModule, NgIf],
   templateUrl: './job-uploader.component.html',
   styleUrl: './job-uploader.component.scss'
 })
@@ -26,8 +27,20 @@ export class JobUploaderComponent {
   ) {
       this.form = this.fb.group({
         coordinatorUrl: ['', [Validators.required]],
-        jobUrl : ['', [Validators.required]],
-        jobName: ['', [Validators.required, Validators.maxLength(40)]],
+        jobId: [1,  Validators.required],
+        jobName: ['', Validators.required],
+
+        jobPath: ['', Validators.required],
+        jobStorageConnectionString: ['', Validators.required],
+
+        dataStorageConnectionString: ['', Validators.required],
+        inputsPath: ['', Validators.required],
+        mappersOutputsPath: ['', Validators.required],
+        reducersOutputsPath: ['', Validators.required],
+
+        mappersCount: [1,  [Validators.required, Validators.min(1)]],
+        reducersCount: [1,  [Validators.required, Validators.min(1)]],
+        sorterInMemoryRecords: [1,  [Validators.required, Validators.min(1)]],
       });
   }
 
@@ -40,8 +53,20 @@ export class JobUploaderComponent {
     this.jobService.setCoordinatorUrl(this.form.value.coordinatorUrl!);
 
     const req: UploadJobRequest = {
-      jobName:  this.form.value.jobName!,
-      jobUrl:  this.form.value.jobUrl!
+      jobId: this.form.value.jobId,
+      jobName: this.form.value.jobName,
+
+      jobPath: this.form.value.jobPath,
+      jobStorageConnectionString: this.form.value.jobStorageConnectionString,
+      dataStorageConnectionString: this.form.value.dataStorageConnectionString,
+
+      inputsPath: this.form.value.inputsPath,
+      mappersOutputsPath:  this.form.value.mappersOutputsPath,
+      reducersOutputsPath: this.form.value.reducersOutputsPath,
+
+      mappersCount: this.form.value.mappersCount,
+      reducersCount: this.form.value.reducersCount,
+      sorterInMemoryRecords: this.form.value.sorterInMemoryRecords,
     };
 
     this.isSubmitting = true;

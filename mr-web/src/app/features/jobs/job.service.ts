@@ -4,9 +4,29 @@ import { Observable } from "rxjs";
 
 import { JobSummary } from './job-list/job-list-item/job-list-item.component';
 
+export type PhaseName = 'MAP' | 'REDUCE';
+export type JobStatus = 'RUNNING' | 'FINISHED' | 'WAITING';
+export type TerminationStatus = 'OK' | 'ABORTED';
+
+export interface PhaseDuration {
+  phaseName: 'MAP' | 'REDUCE';
+  start: string;
+  end: string;
+}
+
+export interface JobProgress {
+  status: 'RUNNING' | 'FINISHED';
+  phase: PhaseName;
+
+  totalTasks: number;
+  completedTasks: number;
+
+  terminationStatus: TerminationStatus;
+  phaseDurations: PhaseDuration[];  
+} 
+
 export interface JobInfo {
-  id: number;
-  name: string;
+  jobName: string;
 
   jobStorageType:  'LOCAL' | 'CEPH' | 'S3' | 'YANDEX_CLOUD';
   dataStorageType: 'LOCAL' | 'CEPH' | 'S3' | 'YANDEX_CLOUD';
@@ -17,20 +37,24 @@ export interface JobInfo {
   mappers:  number;
   reducers: number;
 
-  createdAt: string;
-}
-
-export interface JobProgress {
-  status:  'RUNNING' | 'FINISHED' | 'WAITING';
-  phase:   'MAP' | 'REDUCE' | 'FINISHED';
-
-  total: number;
-  completed: number;
+  progressInfo: JobProgress;
 }
 
 export interface UploadJobRequest {
+  jobId: number;
   jobName: string;
-  jobUrl: string;
+  jobPath: string;
+
+  jobStorageConnectionString: string;
+  dataStorageConnectionString: string;
+
+  inputsPath: string;
+  mappersOutputsPath: string;
+  reducersOutputsPath: string;
+
+  mappersCount: number;
+  reducersCount: number;
+  sorterInMemoryRecords: number;
 }
 
 
@@ -67,6 +91,6 @@ export class JobService {
   }
 
   uploadJob(req: UploadJobRequest): Observable<{ jobId: number; uiUrl: string }> {
-    return this.http.post<{ jobId: number; uiUrl: string }>(this.api('/jobs'), req);
+    return this.http.post<{ jobId: number; uiUrl: string }>(this.api('/job'), req);
   }
 }

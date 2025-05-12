@@ -1,9 +1,11 @@
 .footer {
     padding: 0.5rem 1rem;
-    background: #fafafa;
+    background: black;
     font-size: 0.875rem;
+    box-shadow: 0px -4px 2.5px rgba(185, 255, 102, 0.65);
 
-    .footer__inner {
+    &__inner {
+        color: antiquewhite;
         display: flex;
         align-items: center;
     }

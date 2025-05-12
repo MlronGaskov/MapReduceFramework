@@ -1,7 +1,7 @@
 import { Component, Inject } from '@angular/core';
 import { MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { Observable } from 'rxjs';
-import { AsyncPipe, NgIf } from '@angular/common';
+import { AsyncPipe, NgFor, NgIf } from '@angular/common';
 import { JobService, JobInfo, JobProgress } from '../job.service';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -12,7 +12,7 @@ interface DialogData { jobId: number; }
 
 @Component({
   selector: 'app-job-details-dialog',
-  imports: [AsyncPipe, MatDialogModule, MatDividerModule, MatIconModule, NgIf],
+  imports: [AsyncPipe, MatDialogModule, MatDividerModule, MatIconModule, NgIf, NgFor],
   templateUrl: './job-details-dialog.component.html',
   styleUrl: './job-details-dialog.component.scss'
 })

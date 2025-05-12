@@ -19,13 +19,13 @@ export class JobListComponent {
     this.reload();
   }
 
-  jobs$: Observable<JobSummary[]>;
+  jobs$!: Observable<JobSummary[]>;
 
   constructor(
     private readonly jobService: JobService,
     private readonly dialog: MatDialog
   ) {
-    this.jobs$ = this.jobService.getJobs();
+    //this.jobs$ = this.jobService.getJobs();
   }
 
   openJob(jobId: number): void {

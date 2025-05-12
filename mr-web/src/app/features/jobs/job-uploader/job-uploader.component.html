@@ -1,31 +1,127 @@
 <mat-card class="uploader">
-    <mat-card-title>Submit new job</mat-card-title>
+    <mat-card-title class="uploader__title">Submit new job</mat-card-title>
   
     <form [formGroup]="form" (ngSubmit)="upload()">
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>Coordinator URL (e.g. http://192.168.10.10:8080)</mat-label>
-        <input matInput formControlName="coordinatorUrl" />
-        <mat-error *ngIf="form.controls.coordinatorUrl.hasError('required')">
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="coordUrl">
+          Coordinator URL
+        </label> 
+        <input id="coordUrl" class="uploader__form-input" matInput formControlName="coordinatorUrl" />        
+        <mat-error *ngIf="form.controls['coordinatorUrl'].hasError('required')">
           URL required
         </mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>Job URL</mat-label>
-        <input matInput formControlName="jobUrl" />
-        <mat-error *ngIf="form.controls.jobUrl.hasError('required')">
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="jobId">
+          Job Id
+        </label>
+        <input id="jobId" class="uploader__form-input" matInput formControlName="jobId" />
+        <mat-error *ngIf="form.controls['jobId'].hasError('required')">
+          Id required
+        </mat-error>
+      </mat-form-field>      
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="jobName">
+          Job name
+        </label>
+        <input id="jobName" class="uploader__form-input" matInput formControlName="jobName" />
+        <mat-error *ngIf="form.controls['jobName'].hasError('required')">
+          Name required
+        </mat-error>
+      </mat-form-field>      
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="jobUrl">
+          Job URL
+        </label>
+        <input id="jobUrl" class="uploader__form-input" matInput formControlName="jobPath" />
+        <mat-error *ngIf="form.controls['jobPath'].hasError('required')">
           URL required
         </mat-error>
       </mat-form-field>
   
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>Job name</mat-label>
-        <input matInput formControlName="jobName" />
-        <mat-error *ngIf="form.controls.jobName.hasError('required')">
-          Name required
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="jobStorageConnectionString">
+          Job storage type
+        </label>
+        <input id="jobStorageConnectionString" class="uploader__form-input" matInput formControlName="jobStorageConnectionString" />
+        <mat-error *ngIf="form.controls['jobStorageConnectionString'].hasError('required')">
+          jobStorageConnectionString required
         </mat-error>
       </mat-form-field>
   
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="dataStorageConnectionString">
+          Data storage type
+        </label>
+        <input id="dataStorageConnectionString" class="uploader__form-input" matInput formControlName="dataStorageConnectionString" />
+        <mat-error *ngIf="form.controls['dataStorageConnectionString'].hasError('required')">
+          dataStorageConnectionString required
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="inputsPath">
+          Inputs path
+        </label>
+        <input id="inputsPath" class="uploader__form-input" matInput formControlName="inputsPath" />
+        <mat-error *ngIf="form.controls['inputsPath'].hasError('required')">
+          inputsPath required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="mappersOutputsPath">
+          Mappers outputs path
+        </label>
+        <input id="mappersOutputsPath" class="uploader__form-input" matInput formControlName="mappersOutputsPath" />
+        <mat-error *ngIf="form.controls['mappersOutputsPath'].hasError('required')">
+          mappersOutputsPath required
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="reducersOutputsPath">
+          Reducers outputs path
+        </label>
+        <input id="reducersOutputsPath" class="uploader__form-input" matInput formControlName="reducersOutputsPath" />
+        <mat-error *ngIf="form.controls['reducersOutputsPath'].hasError('required')">
+          reducersOutputsPath required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="mappersCount">
+          Mappers count
+        </label>
+        <input id="mappersCount" class="uploader__form-input" matInput formControlName="mappersCount" />
+        <mat-error *ngIf="form.controls['mappersCount'].hasError('required')">
+          mappersCount required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="reducersCount">
+          Reducers count
+        </label>
+        <input id="reducersCount" class="uploader__form-input" matInput formControlName="reducersCount" />
+        <mat-error *ngIf="form.controls['reducersCount'].hasError('required')">
+          reducersCount required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <label for="sorterInMemoryRecords">
+          Sorted in memory records
+        </label>
+        <input id="sorterInMemoryRecords" class="uploader__form-input" matInput formControlName="sorterInMemoryRecords" />
+        <mat-error *ngIf="form.controls['sorterInMemoryRecords'].hasError('required')">
+          sorterInMemoryRecords required
+        </mat-error>
+      </mat-form-field>      
+
       <button
         mat-raised-button
         color="primary"
