@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, NgFor } from '@angular/common';
 import { Observable } from 'rxjs';
 
 import { JobListItemComponent } from './job-list-item/job-list-item.component';
@@ -10,13 +10,13 @@ import { JobSummary } from './job-list-item/job-list-item.component';
 
 @Component({
   selector: 'app-job-list',
-  imports: [JobListItemComponent, AsyncPipe],
+  imports: [JobListItemComponent, AsyncPipe, NgFor],
   templateUrl: './job-list.component.html',
   styleUrl: './job-list.component.scss'
 })
 export class JobListComponent {
   ngOnInit(): void {
-    this.reload();
+    //this.reload();
   }
 
   jobs$!: Observable<JobSummary[]>;

@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angula
 import { finalize } from 'rxjs/operators';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatCardModule } from '@angular/material/card';
+import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 
 import { JobService, UploadJobRequest } from '../job.service';
@@ -10,7 +11,7 @@ import { NgIf } from '@angular/common';
 
 @Component({
   selector: 'app-job-uploader',
-  imports: [MatCardModule, MatFormFieldModule, ReactiveFormsModule, NgIf],
+  imports: [MatCardModule, MatFormFieldModule, MatInputModule, ReactiveFormsModule, NgIf],
   templateUrl: './job-uploader.component.html',
   styleUrl: './job-uploader.component.scss'
 })
@@ -70,6 +71,7 @@ export class JobUploaderComponent {
     };
 
     this.isSubmitting = true;
+    console.log(this.isSubmitting);
     this.jobService
       .uploadJob(req)
       .pipe(finalize(() => (this.isSubmitting = false)))

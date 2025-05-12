@@ -1,9 +1,18 @@
+@use '@angular/material' as mat;
+
+:root {
+  @include mat.form-field-overrides((
+    filled-container-color: rgba(133, 189, 70, 0.4),
+  ));
+}
+
 .uploader {
     max-width: 60vh;
     background-color: #B9FF66;
     padding: 1rem;
   
     form {
+      max-height: 60vh;
       display: flex;
       flex-direction: column;
       gap: 1rem;
