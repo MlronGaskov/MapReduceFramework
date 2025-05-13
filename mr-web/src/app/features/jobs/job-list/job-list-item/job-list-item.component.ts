@@ -10,7 +10,7 @@ export interface JobSummary {
 
 @Component({
   selector: 'app-job-list-item',
-  imports: [MatIconModule, DatePipe],
+  imports: [MatIconModule],
   templateUrl: './job-list-item.component.html',
   styleUrl: './job-list-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush

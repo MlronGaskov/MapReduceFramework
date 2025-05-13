@@ -8,4 +8,29 @@
     td { 
         word-break: break-all; 
     }
-  }  
+    th, td {
+        font-family: "Fira Sans", sans-serif;
+        font-weight: 500;
+    }
+}
+
+.table-info {
+    height: 30vh;
+}
+.table-progress {
+    height: 23vh;
+}
+
+button {
+    background-color: #B9FF66;
+    border-color: rgba(211, 235, 184);
+    border-radius: 0.25rem; 
+}
+button:first-child {
+    margin-inline-end: 0.5rem;
+}
+button:last-child {
+    height: 2rem;
+    font-family: "Fira Sans", sans-serif;
+    font-weight: 500;
+}

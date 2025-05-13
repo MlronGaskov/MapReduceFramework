@@ -76,8 +76,8 @@ export class JobUploaderComponent {
       .uploadJob(req)
       .pipe(finalize(() => (this.isSubmitting = false)))
       .subscribe({
-        next: res => {
-          this.snack.open(`Job #${res.jobId} accepted`, 'OK', { duration: 2500 });
+        next: text => {
+          this.snack.open(text, 'OK', { duration: 2500 });
           this.form.reset();
           this.jobUploaded.emit();
         },

@@ -15,18 +15,12 @@ import { JobSummary } from './job-list-item/job-list-item.component';
   styleUrl: './job-list.component.scss'
 })
 export class JobListComponent {
-  ngOnInit(): void {
-    //this.reload();
-  }
-
   jobs$!: Observable<JobSummary[]>;
 
   constructor(
     private readonly jobService: JobService,
     private readonly dialog: MatDialog
-  ) {
-    //this.jobs$ = this.jobService.getJobs();
-  }
+  ) {}
 
   openJob(jobId: number): void {
     this.dialog.open(JobDetailsDialogComponent, {
@@ -36,7 +30,7 @@ export class JobListComponent {
   }
 
   deleteJob(jobId: number): void {
-    this.jobService.deleteJob(jobId).subscribe({
+    this.jobService.deleteJob(jobId - 1).subscribe({
       next: () => console.log('Job deleted', jobId),
       error: err => console.error(err),
     });

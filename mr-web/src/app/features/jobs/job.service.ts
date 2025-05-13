@@ -28,8 +28,8 @@ export interface JobProgress {
 export interface JobInfo {
   jobName: string;
 
-  jobStorageType:  'LOCAL' | 'CEPH' | 'S3' | 'YANDEX_CLOUD';
-  dataStorageType: 'LOCAL' | 'CEPH' | 'S3' | 'YANDEX_CLOUD';
+  jobStorageType: string;
+  dataStorageType: string;
 
   inputsPath: string;
   outputsPath: string; 
@@ -90,7 +90,11 @@ export class JobService {
     return this.http.get<JobProgress>(this.api(`/jobs/${id}/progress`));
   }
 
-  uploadJob(req: UploadJobRequest): Observable<{ jobId: number; uiUrl: string }> {
-    return this.http.post<{ jobId: number; uiUrl: string }>(this.api('/job'), req);
+  uploadJob(req: UploadJobRequest): Observable<string> {
+    return this.http.put(
+      this.api('/job'),
+      req,
+      { responseType: 'text' }
+    );
   }
 }

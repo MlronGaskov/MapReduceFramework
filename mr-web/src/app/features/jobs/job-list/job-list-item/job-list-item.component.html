@@ -5,10 +5,11 @@
       {{ job.jobName }}
     </button>
   
-    <span class="date">{{ job.submissionTime | date: 'short' }}</span>
+    <!-- <span class="date">{{ job.submissionTime | date: 'short' }}</span> -->
+    <span class="date">{{ job.submissionTime }}</span>
   
-    <button mat-icon-button color="warn" aria-label="Delete"
+    <button mat-icon-button class="delete" color="warn" aria-label="Delete"
             (click)="remove.emit(job.jobId)">
       <mat-icon>delete</mat-icon>
     </button>
-  </div>  
+</div>  

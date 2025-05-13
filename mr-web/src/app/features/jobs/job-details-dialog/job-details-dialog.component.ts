@@ -24,15 +24,19 @@ export class JobDetailsDialogComponent {
     @Inject(MAT_DIALOG_DATA) readonly data: DialogData,
     private readonly jobService: JobService
   ) {
+    console.log("Constructor started");
     this.loadStatic();
     this.refreshProgress();
   }
 
   private loadStatic(): void {
-    this.jobInfo$ = this.jobService.getJobInfo(this.data.jobId);
+    console.log("loadStatic started");
+    this.jobInfo$ = this.jobService.getJobInfo(this.data.jobId - 1);
+    console.log(this.jobInfo$);
   }
 
   refreshProgress(): void {
-    this.progress$ = this.jobService.getProgress(this.data.jobId);
+    console.log("refresh started");
+    this.progress$ = this.jobService.getProgress(this.data.jobId - 1);
   }
 }
