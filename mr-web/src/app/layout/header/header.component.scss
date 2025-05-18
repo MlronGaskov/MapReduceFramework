@@ -5,8 +5,13 @@
 
   .logo {
     font-family: "Jaro", sans-serif;
-    font-size: 60px;
+    font-size: 3.5rem;
     color: black;
     margin-right: 0.75rem;
+    &-red {
+      margin: 0;
+      font-size: 3.75rem;
+      color:rgb(192, 25, 25);
+    }
   }
 }  

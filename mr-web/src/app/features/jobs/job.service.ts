@@ -1,6 +1,6 @@
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
-import { Observable } from "rxjs";
+import { map, Observable } from "rxjs";
 
 import { JobSummary } from './job-list/job-list-item/job-list-item.component';
 
@@ -79,8 +79,11 @@ export class JobService {
   }
 
   deleteJob(id: number): Observable<void> {
-    return this.http.delete<void>(this.api(`/jobs/${id}`));
-  }
+  return this.http.delete(
+    this.api(`/jobs/${id}`),
+    { responseType: 'text' }
+  ).pipe(map(() => void 0));
+}
 
   getJobInfo(id: number): Observable<JobInfo> {
     return this.http.get<JobInfo>(this.api(`/jobs/${id}`));

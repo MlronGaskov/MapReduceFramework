@@ -3,6 +3,6 @@
       *ngFor="let j of jobs$ | async"
       [job]="j"
       (open)="openJob($event)"
-      (remove)="deleteJob($event)">
+      (deleted)="reload()">
     </app-job-list-item>
 </div>  

@@ -33,10 +33,10 @@
       </mat-form-field>      
 
       <mat-form-field appearance="fill" class="uploader__form">
-        <mat-label for="jobUrl">
-          Job URL
+        <mat-label for="jobPath">
+          Job path
         </mat-label>
-        <input id="jobUrl" class="uploader__form-input" matInput formControlName="jobPath" />
+        <input id="jobPath" class="uploader__form-input" matInput formControlName="jobPath" />
         <mat-error *ngIf="form.controls['jobPath'].hasError('required')">
           URL required
         </mat-error>

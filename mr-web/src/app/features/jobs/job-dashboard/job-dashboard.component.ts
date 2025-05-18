@@ -9,7 +9,6 @@ import { JobListComponent } from '../job-list/job-list.component';
   styleUrl: './job-dashboard.component.scss'
 })
 export class JobDashboardComponent {
-  /** метод придёт от JobUploader → пробрасываем вниз в JobList (через template reference) */
   refreshList(list: any) {
     list?.reload();
   }
