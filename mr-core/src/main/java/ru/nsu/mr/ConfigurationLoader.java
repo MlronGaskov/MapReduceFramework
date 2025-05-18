@@ -15,6 +15,7 @@ public class ConfigurationLoader {
 
     private static class Config {
         public Integer jobId;
+        public String jobName;
         public String jobPath;
         public String jobStorageConnectionString;
         public String inputsPath;
@@ -35,7 +36,9 @@ public class ConfigurationLoader {
             config = yaml.loadAs(inputStream, Config.class);
         }
 
-        configuration.set(ConfigurationOption.JOB_ID, config.jobId)
+        configuration
+                .set(ConfigurationOption.JOB_ID, config.jobId)
+                .set(ConfigurationOption.JOB_NAME, config.jobName)
                 .set(ConfigurationOption.JOB_PATH, config.jobPath)
                 .set(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING, config.jobStorageConnectionString)
                 .set(ConfigurationOption.INPUTS_PATH, config.inputsPath)

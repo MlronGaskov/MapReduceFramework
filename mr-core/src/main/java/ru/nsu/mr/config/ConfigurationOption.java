@@ -4,6 +4,9 @@ public class ConfigurationOption<T> {
     final String name;
     final T defaultValue;
 
+    public static ConfigurationOption<String> JOB_NAME =
+            new ConfigurationOption<>("mr.job.name", null);
+
     public static ConfigurationOption<Integer> JOB_ID =
             new ConfigurationOption<>("mr.job.id", 1);
 

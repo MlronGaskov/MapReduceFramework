@@ -5,14 +5,21 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
+import ru.nsu.mr.endpoints.dto.JobQueueInfo;
+import ru.nsu.mr.endpoints.dto.JobDetailInfo;
 import ru.nsu.mr.endpoints.dto.NewJobDetails;
 import ru.nsu.mr.endpoints.dto.TaskDetails;
+import ru.nsu.mr.endpoints.dto.JobProgressInfo;
 import ru.nsu.mr.gateway.HttpUtils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.function.Function;
+import java.util.List;
+
 
 public class CoordinatorEndpoint {
     private static final int STATUS_OK = 200;
@@ -23,20 +30,44 @@ public class CoordinatorEndpoint {
     private final Consumer<String> onWorkerRegistration;
     private final Consumer<TaskDetails> onTaskNotification;
     private final Consumer<Configuration> onJobSubmission;
+    private final Consumer<Integer> onDeleteJob;
+    private final Supplier<List<JobQueueInfo>> onGetJobs;
+    private final Function<Integer,JobDetailInfo> onGetJobDetails;
+    private final Function<Integer,JobProgressInfo> onGetJobProgress;
+    private final Supplier<Integer> onGetWorkerCount;
 
     public CoordinatorEndpoint(
             String coordinatorBaseUrl,
             Consumer<String> onWorkerRegistration,
             Consumer<TaskDetails> onTaskNotification,
-            Consumer<Configuration> onJobSubmission) throws IOException {
+            Consumer<Configuration> onJobSubmission,
+            Supplier<List<JobQueueInfo>> onGetJobs,
+            Function<Integer,JobDetailInfo> onGetJobDetails,
+            Consumer<Integer> onDeleteJob,
+            Function<Integer,JobProgressInfo> onGetJobProgress,
+            Supplier<Integer> onGetWorkerCount) throws IOException {
         URI uri = URI.create(coordinatorBaseUrl);
         this.httpServer = HttpServer.create(new InetSocketAddress(uri.getHost(), uri.getPort()), 0);
         this.onWorkerRegistration = onWorkerRegistration;
         this.onTaskNotification = onTaskNotification;
         this.onJobSubmission = onJobSubmission;
-        httpServer.createContext("/workers", new WorkerRegistrationHandler());
-        httpServer.createContext("/notifyTask", new TaskNotificationHandler());
-        httpServer.createContext("/job", new JobSubmissionHandler());
+        this.onGetJobs = onGetJobs;
+        this.onGetJobDetails = onGetJobDetails;
+        this.onDeleteJob = onDeleteJob;
+        this.onGetJobProgress = onGetJobProgress;
+        this.onGetWorkerCount = onGetWorkerCount;
+
+        CorsFilter cors = new CorsFilter();
+        httpServer.createContext("/workers",  new WorkerRegistrationHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/workers/count", new WorkersCountHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/notifyTask", new TaskNotificationHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/job", new JobSubmissionHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/jobs", new JobsQueryHandler())
+                .getFilters().add(cors);
     }
 
     public void startServer() {
@@ -60,6 +91,22 @@ public class CoordinatorEndpoint {
                 HttpUtils.sendResponse(exchange, STATUS_OK, "Worker registered on url: " + workerBaseUrl);
             } catch (Exception e) {
                 HttpUtils.sendErrorResponse(exchange, STATUS_BAD_REQUEST, "Failed to register worker: " + e.getMessage());
+            }
+        }
+    }
+
+    private class WorkersCountHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                HttpUtils.sendErrorResponse(exchange, STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed");
+                return;
+            }
+            try {
+                int count = onGetWorkerCount.get();
+                HttpUtils.sendJsonResponse(exchange, STATUS_OK, count);
+            } catch (Exception e) {
+                HttpUtils.sendErrorResponse(exchange, STATUS_BAD_REQUEST, "Failed to fetch worker count");
             }
         }
     }
@@ -92,6 +139,7 @@ public class CoordinatorEndpoint {
             try {
                 NewJobDetails jobDetails = HttpUtils.readRequestBody(exchange, NewJobDetails.class);
                 Configuration jobConfig = new Configuration()
+                        .set(ConfigurationOption.JOB_NAME, jobDetails.jobName())
                         .set(ConfigurationOption.JOB_ID, jobDetails.jobId())
                         .set(ConfigurationOption.JOB_PATH, jobDetails.jobPath())
                         .set(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING, jobDetails.jobStorageConnectionString())
@@ -111,4 +159,61 @@ public class CoordinatorEndpoint {
             }
         }
     }
+
+    private class JobsQueryHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            String method = ex.getRequestMethod();
+            String path   = ex.getRequestURI().getPath();
+            String prefix = "/jobs";
+
+            // GET /jobs
+            if ("GET".equalsIgnoreCase(method) && prefix.equals(path)) {
+                List<JobQueueInfo> list = onGetJobs.get();
+                HttpUtils.sendJsonResponse(ex, STATUS_OK, list);
+
+                // GET /jobs/{idx}/progress
+            } else if ("GET".equalsIgnoreCase(method)
+                    && path.startsWith(prefix + "/")
+                    && path.endsWith("/progress")) {
+                try {
+                    String num = path.substring(
+                            prefix.length() + 1,
+                            path.length() - "/progress".length()
+                    );
+                    int idx = Integer.parseInt(num);
+                    JobProgressInfo prog = onGetJobProgress.apply(idx);
+                    HttpUtils.sendJsonResponse(ex, STATUS_OK, prog);
+                } catch (NumberFormatException | IndexOutOfBoundsException | IllegalStateException e) {
+                    HttpUtils.sendErrorResponse(ex, STATUS_BAD_REQUEST, "Invalid job index");
+                }
+
+                // GET /jobs/{idx}
+            } else if ("GET".equalsIgnoreCase(method) && path.startsWith(prefix + "/")) {
+                try {
+                    int idx = Integer.parseInt(path.substring(prefix.length() + 1));
+                    JobDetailInfo detail = onGetJobDetails.apply(idx);
+                    HttpUtils.sendJsonResponse(ex, STATUS_OK, detail);
+                } catch (Exception e) {
+                    HttpUtils.sendErrorResponse(ex, STATUS_BAD_REQUEST, "Invalid job index");
+                }
+
+                // DELETE /jobs/{idx}
+            } else if ("DELETE".equalsIgnoreCase(method) && path.startsWith(prefix + "/")) {
+                try {
+                    int idx = Integer.parseInt(path.substring(prefix.length() + 1));
+                    onDeleteJob.accept(idx);
+                    HttpUtils.sendResponse(ex, STATUS_OK, "Job " + idx + " deleted");
+                } catch (IndexOutOfBoundsException e) {
+                    HttpUtils.sendErrorResponse(ex, STATUS_BAD_REQUEST, "Invalid job index");
+                } catch (Exception e) {
+                    HttpUtils.sendErrorResponse(ex, STATUS_BAD_REQUEST, "Failed to delete job");
+                }
+
+            } else {
+                HttpUtils.sendErrorResponse(ex, STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed");
+            }
+        }
+    }
+
 }
