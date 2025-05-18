@@ -580,7 +580,6 @@ public class Coordinator {
             mapTaskQueue.clear();
             reduceTaskQueue.clear();
             w.terminationStatus = JobTerminationStatus.ABORTED;
-            return;
         }
         allJobs.remove(idx);
         jobQueue.remove(w);
