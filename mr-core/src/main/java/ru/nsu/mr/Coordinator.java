@@ -213,6 +213,7 @@ public class Coordinator {
                 currentJob.config.get(ConfigurationOption.MAPPERS_COUNT),
                 currentJob.config.get(ConfigurationOption.REDUCERS_COUNT));
 
+        String jobName = currentJob.config.get(ConfigurationOption.JOB_NAME);
         String jobPath = currentJob.config.get(ConfigurationOption.JOB_PATH);
         String jobStorageConnectionString = currentJob.config.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING);
         String dataStorageConnectionString = currentJob.config.get(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING);
@@ -225,6 +226,7 @@ public class Coordinator {
 
         JobInformation jobInformation = new JobInformation(
                 1,
+                jobName,
                 jobPath,
                 jobStorageConnectionString,
                 mappersCount,
@@ -404,6 +406,7 @@ public class Coordinator {
             NewTaskDetails failedTask = new NewTaskDetails(
                     new JobInformation(
                             1,
+                            currentJob.config.get(ConfigurationOption.JOB_NAME),
                             currentJob.config.get(ConfigurationOption.JOB_PATH),
                             currentJob.config.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING),
                             currentJob.config.get(ConfigurationOption.MAPPERS_COUNT),
@@ -513,6 +516,7 @@ public class Coordinator {
             return allJobs.stream()
                     .map(w -> new JobQueueInfo(
                             w.config.get(ConfigurationOption.JOB_ID),
+                            w.config.get(ConfigurationOption.JOB_NAME),
                             TIME_FMT.format(w.submissionTime)
                     ))
                     .toList();
@@ -524,6 +528,7 @@ public class Coordinator {
             JobWrapper w = allJobs.get(idx);
 
             return new JobDetailInfo(
+                    w.config.get(ConfigurationOption.JOB_NAME),
                     w.config.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING),
                     w.config.get(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING),
                     w.config.get(ConfigurationOption.INPUTS_PATH),

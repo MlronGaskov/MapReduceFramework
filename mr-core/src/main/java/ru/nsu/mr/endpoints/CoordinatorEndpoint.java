@@ -56,11 +56,18 @@ public class CoordinatorEndpoint {
         this.onDeleteJob = onDeleteJob;
         this.onGetJobProgress = onGetJobProgress;
         this.onGetWorkerCount = onGetWorkerCount;
-        httpServer.createContext("/workers", new WorkerRegistrationHandler());
-        httpServer.createContext("/workers/count", new WorkersCountHandler());
-        httpServer.createContext("/notifyTask", new TaskNotificationHandler());
-        httpServer.createContext("/job", new JobSubmissionHandler());
-        httpServer.createContext("/jobs", new JobsQueryHandler());
+
+        CorsFilter cors = new CorsFilter();
+        httpServer.createContext("/workers",  new WorkerRegistrationHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/workers/count", new WorkersCountHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/notifyTask", new TaskNotificationHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/job", new JobSubmissionHandler())
+                .getFilters().add(cors);
+        httpServer.createContext("/jobs", new JobsQueryHandler())
+                .getFilters().add(cors);
     }
 
     public void startServer() {
@@ -132,6 +139,7 @@ public class CoordinatorEndpoint {
             try {
                 NewJobDetails jobDetails = HttpUtils.readRequestBody(exchange, NewJobDetails.class);
                 Configuration jobConfig = new Configuration()
+                        .set(ConfigurationOption.JOB_NAME, jobDetails.jobName())
                         .set(ConfigurationOption.JOB_ID, jobDetails.jobId())
                         .set(ConfigurationOption.JOB_PATH, jobDetails.jobPath())
                         .set(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING, jobDetails.jobStorageConnectionString())

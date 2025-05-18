@@ -3,6 +3,7 @@ package ru.nsu.mr.endpoints.dto;
 import java.util.List;
 
 public record JobDetailInfo(
+        String jobName,
         String jobStorageConnectionString,
         String dataStorageConnectionString,
         String inputsPath,
