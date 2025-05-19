@@ -1,0 +1,13 @@
+{{- if .Values.coordinator.workersConfigMap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}{{ .Values.coordinator.workersConfigMap.nameSuffix }}
+  labels:
+    app.kubernetes.io/name: {{ include "mr-cluster.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+data:
+  workers: ""
+{{- end }}
+

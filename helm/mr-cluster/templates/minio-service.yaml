@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}-minio
+spec:
+  type: {{ .Values.minio.service.type }}
+  selector:
+    app: {{ include "mr-cluster.fullname" . }}-minio
+  ports:
+  - name: api
+    port: {{ .Values.minio.service.apiPort }}
+    targetPort: {{ .Values.minio.service.apiPort }}
+    {{- if eq .Values.minio.service.type "NodePort" }}
+    nodePort: 30900
+    {{- end }}
+  - name: console
+    port: {{ .Values.minio.service.consolePort }}
+    targetPort: {{ .Values.minio.service.consolePort }}
+    {{- if eq .Values.minio.service.type "NodePort" }}
+    nodePort: 30901
+    {{- end }}

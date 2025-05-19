@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}-kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "mr-cluster.fullname" . }}-kibana
+  template:
+    metadata:
+      labels:
+        app: {{ include "mr-cluster.fullname" . }}-kibana
+    spec:
+      containers:
+      - name: kibana
+        image: "{{ .Values.kibana.image.repository }}:{{ .Values.kibana.image.tag }}"
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://{{ include "mr-cluster.fullname" . }}-elasticsearch:9200"
+        ports:
+        - containerPort: {{ .Values.kibana.service.port }}

@@ -1,0 +1,32 @@
+{{- if .Values.coordinator.workersConfigMap.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: coordinator-cm-writer
+  labels:
+    app.kubernetes.io/name: {{ include "mr-cluster.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames:
+      - {{ include "mr-cluster.fullname" . }}{{ .Values.coordinator.workersConfigMap.nameSuffix }}
+    verbs: ["get","patch","update"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: coordinator-cm-writer-binding
+  labels:
+    app.kubernetes.io/name: {{ include "mr-cluster.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+subjects:
+  - kind: ServiceAccount
+    name: coordinator-sa
+roleRef:
+  kind: Role
+  name: coordinator-cm-writer
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+

@@ -22,10 +22,7 @@ import ru.nsu.mr.storages.StorageProviderFactory;
 import ru.nsu.mr.endpoints.WorkerEndpoint.TaskService;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -177,12 +174,30 @@ public class Worker {
         return result;
     }
 
-    private void configureLogging(String logDestination) throws MalformedURLException, URISyntaxException {
+    private void configureLogging(String logDestination) throws IOException, URISyntaxException {
         synchronized (logLock) {
             boolean logToEs = logDestination.startsWith("http://") || logDestination.startsWith("https://");
             String sanitizedWorkerId = workerBaseUrl
                     .replaceAll("https?://", "")
                     .replaceAll("[^a-zA-Z0-9.-]", "_");
+
+            if (logToEs) {
+                try {
+                    URI uri = new URI(logDestination);
+                    URI healthUri = new URI(uri.getScheme(), uri.getAuthority(), "/", null, null);
+                    HttpURLConnection conn = (HttpURLConnection) healthUri.toURL().openConnection();
+                    conn.setRequestMethod("HEAD");
+                    conn.setConnectTimeout(2000);
+                    conn.setReadTimeout(2000);
+                    conn.connect();
+                    int code = conn.getResponseCode();
+                    if (code < 200 || code >= 300) {
+                        throw new IOException("Elasticsearch returned HTTP " + code);
+                    }
+                } catch (IOException e) {
+                    throw new IOException("Failed to connect to Elasticsearch at " + logDestination, e);
+                }
+            }
 
             if (!loggingConfigured) {
                 ConfigurationBuilder<?> builder = ConfigurationBuilderFactory.newConfigurationBuilder();
@@ -265,6 +280,7 @@ public class Worker {
             }
         }
         LOGGER.error("All attempts to register worker {} have failed.", workerBaseUrl);
+        throw new RuntimeException();
     }
 
     private synchronized void waitForTask() throws InterruptedException {

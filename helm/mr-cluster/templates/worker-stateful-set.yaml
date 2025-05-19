@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}-worker
+spec:
+  serviceName: {{ include "mr-cluster.fullname" . }}-worker
+  replicas: {{ .Values.replicaCount.worker }}
+  selector:
+    matchLabels:
+      app: {{ include "mr-cluster.fullname" . }}-worker
+  template:
+    metadata:
+      labels:
+        app: {{ include "mr-cluster.fullname" . }}-worker
+    spec:
+      initContainers:
+      - name: wait-for-coordinator
+        image: curlimages/curl:8.4.0    # лёгкий контейнер с curl
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for coordinator to be ready..."
+          until curl --silent --fail \
+            http://{{ include "mr-cluster.fullname" . }}-coordinator:{{ .Values.coordinator.service.port }}/health; do
+            echo "  still waiting..."
+            sleep 5
+          done
+          echo "Coordinator is up!"
+
+      containers:
+      - name: worker
+        image: "{{ .Values.image.worker.repository }}:{{ .Values.image.worker.tag }}"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - "java"
+        - "-jar"
+        - "mr-app-{{ .Chart.AppVersion }}.jar"
+        - "worker"
+        - 'http://{{ include "mr-cluster.fullname" . }}-coordinator:{{ .Values.coordinator.service.port }}'
+        - 'http://$(POD_NAME).{{ include "mr-cluster.fullname" . }}-worker.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.worker.service.port }}'
+        ports:
+        - name: http
+          containerPort: {{ .Values.worker.service.port }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.worker.service.port }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.worker.service.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.worker.service.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
