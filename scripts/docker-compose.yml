@@ -1,6 +1,6 @@
 services:
   coordinator:
-    build: .
+    image: mirongaskov2005/mr-framework-app:1.2
     depends_on:
       - elasticsearch
       - kibana
@@ -8,18 +8,18 @@ services:
     ports:
       - "8080:8080"
     command: >
-      sh -c "sleep 20 && java -jar mr-app-1.0.jar --logs http://elasticsearch:9200/mr-logs-index/_doc coordinator http://coordinator:8080"
+      sh -c "sleep 20 && java -jar mr-app-1.2.jar coordinator http://coordinator:8080"
     networks:
       - mrnet
 
   worker:
-    build: .
+    image: mirongaskov2005/mr-framework-app:1.2
     depends_on:
       - coordinator
       - elasticsearch
       - kibana
     command: >
-      sh -c "sleep 23 && java -jar mr-app-1.0.jar --logs http://elasticsearch:9200/mr-logs-index/_doc worker http://coordinator:8080 http://$(hostname):8090"
+      sh -c "sleep 23 && java -jar mr-app-1.2.jar worker http://coordinator:8080 http://$(hostname):8090"
     networks:
       - mrnet
 

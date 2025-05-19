@@ -1,0 +1,65 @@
+replicaCount:
+  coordinator: 1
+  worker: 3
+
+image:
+  coordinator:
+    repository: cr.yandex/crp4f6o5uc8ueb8kh5sr/mr-app
+    tag: "1.2"
+  worker:
+    repository: cr.yandex/crp4f6o5uc8ueb8kh5sr/mr-app
+    tag: "1.2"
+
+coordinator:
+  service:
+    type: NodePort
+    port: 8080
+  logsIndexURI: /mr-logs-index/_doc
+  workersConfigMap:
+    enabled: true
+    nameSuffix: "-workers"
+
+worker: 
+  service:
+    port: 8090
+
+elasticsearch:
+  enabled: true
+  image:
+    repository: elasticsearch
+    tag: "8.7.0"
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+
+kibana:
+  enabled: true
+  image:
+    repository: kibana
+    tag: "8.7.0"
+  service:
+    type: NodePort
+    port: 5601
+
+minio:
+  enabled: true
+  image:
+    repository: minio/minio
+    tag: latest
+  credentials:
+    accessKey: minioadmin
+    secretKey: minioadmin
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  service:
+    type: NodePort
+    apiPort: 9000
+    consolePort: 9001

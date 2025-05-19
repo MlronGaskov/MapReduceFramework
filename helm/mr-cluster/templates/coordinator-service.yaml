@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}-coordinator
+spec:
+  type: {{ .Values.coordinator.service.type }}
+  selector:
+    app: {{ include "mr-cluster.fullname" . }}-coordinator
+  ports:
+  - port: {{ .Values.coordinator.service.port }}
+    targetPort: {{ .Values.coordinator.service.port }}
+    {{- if eq .Values.coordinator.service.type "NodePort" }}
+    nodePort: 30080
+    {{- end }}

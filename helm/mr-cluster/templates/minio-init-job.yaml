@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}-minio-init
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+spec:
+  template:
+    spec:
+      containers:
+      - name: mc
+        image: minio/mc:latest
+        command:
+        - sh
+        - -c
+        - |
+          until mc alias set myminio http://{{ include "mr-cluster.fullname" . }}-minio:{{ .Values.minio.service.apiPort }} \
+            {{ .Values.minio.credentials.accessKey }} {{ .Values.minio.credentials.secretKey }} \
+            2>/dev/null; do
+            echo Waiting for MinIO...
+            sleep 2
+          done
+          mc mb myminio/jobs || true
+      restartPolicy: OnFailure
