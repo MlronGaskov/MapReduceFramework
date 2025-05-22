@@ -1,0 +1,15 @@
+<div class="row mat-elevation-z1">
+    <span class="id">#{{ job.jobId }}</span>
+  
+    <button mat-button class="name" (click)="open.emit(job.backendIndex)">
+      {{ job.jobName }}
+    </button>
+  
+    <!-- <span class="date">{{ job.submissionTime | date: 'short' }}</span> -->
+    <span class="date">{{ job.submissionTime }}</span>
+  
+    <button mat-icon-button class="delete" color="warn" aria-label="Delete"
+            (click)="delete()">
+      <mat-icon>delete</mat-icon>
+    </button>
+</div>  

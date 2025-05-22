@@ -1,0 +1,17 @@
+.toolbar {
+
+  background-color: #B9FF66;
+  box-shadow: 0px 4px 3px rgba(0,0,0,0.35);
+
+  .logo {
+    font-family: "Jaro", sans-serif;
+    font-size: 3.5rem;
+    color: black;
+    margin-right: 0.75rem;
+    &-red {
+      margin: 0;
+      font-size: 3.75rem;
+      color:rgb(192, 25, 25);
+    }
+  }
+}  

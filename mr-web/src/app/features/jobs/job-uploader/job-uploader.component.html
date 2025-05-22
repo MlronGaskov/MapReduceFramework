@@ -1,0 +1,123 @@
+<mat-card class="uploader">
+    <mat-card-title class="uploader__title">Submit new job</mat-card-title>
+  
+    <form [formGroup]="form" (ngSubmit)="upload()">
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="jobId">
+          Job Id
+        </mat-label>
+        <input id="jobId" class="uploader__form-input" matInput formControlName="jobId" />
+        <mat-error *ngIf="form.controls['jobId'].hasError('required')">
+          Id required
+        </mat-error>
+      </mat-form-field>      
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="jobName">
+          Job name
+        </mat-label>
+        <input id="jobName" class="uploader__form-input" matInput formControlName="jobName" />
+        <mat-error *ngIf="form.controls['jobName'].hasError('required')">
+          Name required
+        </mat-error>
+      </mat-form-field>      
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="jobPath">
+          Job path
+        </mat-label>
+        <input id="jobPath" class="uploader__form-input" matInput formControlName="jobPath" />
+        <mat-error *ngIf="form.controls['jobPath'].hasError('required')">
+          URL required
+        </mat-error>
+      </mat-form-field>
+  
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="jobStorageConnectionString">
+          Job storage type
+        </mat-label>
+        <input id="jobStorageConnectionString" class="uploader__form-input" matInput formControlName="jobStorageConnectionString" />
+        <mat-error *ngIf="form.controls['jobStorageConnectionString'].hasError('required')">
+          jobStorageConnectionString required
+        </mat-error>
+      </mat-form-field>
+  
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="dataStorageConnectionString">
+          Data storage type
+        </mat-label>
+        <input id="dataStorageConnectionString" class="uploader__form-input" matInput formControlName="dataStorageConnectionString" />
+        <mat-error *ngIf="form.controls['dataStorageConnectionString'].hasError('required')">
+          dataStorageConnectionString required
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="inputsPath">
+          Inputs path
+        </mat-label>
+        <input id="inputsPath" class="uploader__form-input" matInput formControlName="inputsPath" />
+        <mat-error *ngIf="form.controls['inputsPath'].hasError('required')">
+          inputsPath required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="mappersOutputsPath">
+          Mappers outputs path
+        </mat-label>
+        <input id="mappersOutputsPath" class="uploader__form-input" matInput formControlName="mappersOutputsPath" />
+        <mat-error *ngIf="form.controls['mappersOutputsPath'].hasError('required')">
+          mappersOutputsPath required
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="reducersOutputsPath">
+          Reducers outputs path
+        </mat-label>
+        <input id="reducersOutputsPath" class="uploader__form-input" matInput formControlName="reducersOutputsPath" />
+        <mat-error *ngIf="form.controls['reducersOutputsPath'].hasError('required')">
+          reducersOutputsPath required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="mappersCount">
+          Mappers count
+        </mat-label>
+        <input id="mappersCount" class="uploader__form-input" matInput formControlName="mappersCount" />
+        <mat-error *ngIf="form.controls['mappersCount'].hasError('required')">
+          mappersCount required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="reducersCount">
+          Reducers count
+        </mat-label>
+        <input id="reducersCount" class="uploader__form-input" matInput formControlName="reducersCount" />
+        <mat-error *ngIf="form.controls['reducersCount'].hasError('required')">
+          reducersCount required
+        </mat-error>
+      </mat-form-field>
+      
+      <mat-form-field appearance="fill" class="uploader__form">
+        <mat-label for="sorterInMemoryRecords">
+          Sorted in memory records
+        </mat-label>
+        <input id="sorterInMemoryRecords" class="uploader__form-input" matInput formControlName="sorterInMemoryRecords" />
+        <mat-error *ngIf="form.controls['sorterInMemoryRecords'].hasError('required')">
+          sorterInMemoryRecords required
+        </mat-error>
+      </mat-form-field>      
+
+      <button
+        mat-raised-button
+        color="primary"
+        type="submit"
+        [disabled]="isSubmitting || form.invalid">
+        {{ isSubmitting ? 'Uploading…' : 'Upload' }}
+      </button>
+    </form>
+</mat-card>  

@@ -1,0 +1,51 @@
+<h2 mat-dialog-title>
+    Job information - {{ (jobInfo$ | async)?.jobName }}
+</h2>
+  
+<mat-dialog-content>
+    <ng-container *ngIf="(jobInfo$ | async) as info">
+        <table class="table table-info">
+        <tr><th>Job storage type</th><td>{{ storageType(info.jobStorageConnectionString) }}</td></tr>
+        <tr><th>Data storage type</th><td>{{ storageType(info.dataStorageConnectionString) }}</td></tr>
+        <tr><th>Input files path</th><td>{{ info.inputsPath }}</td></tr>
+        <tr><th>Output files path</th><td>{{ info.reducersOutputsPath }}</td></tr>
+        <tr><th>Mappers</th><td>{{ info.mappersCount }}</td></tr>
+        <tr><th>Reducers</th><td>{{ info.reducersCount }}</td></tr>
+        </table>
+    </ng-container>
+
+    <mat-divider></mat-divider>
+
+    <ng-container *ngIf="(progress$ | async) as p">
+        <table class="table table-progress">
+            <tr>
+            <th>Job status</th>
+            <td>{{ p.status }}</td>
+            </tr>
+
+            <ng-container *ngIf="p.status === 'RUNNING'; else finishedBlock">
+            <tr><th>Current phase</th>   <td>{{ p.phase }}</td></tr>
+            <tr><th>Total tasks</th>     <td>{{ p.totalTasks }}</td></tr>
+            <tr><th>Completed tasks</th> <td>{{ p.completedTasks }}</td></tr>
+            </ng-container>
+
+            <ng-template #finishedBlock>
+            <tr><th>Termination</th> <td>{{ p.terminationStatus }}</td></tr>
+
+            <tr><th colspan="2">Phase durations</th></tr>
+            <tr *ngFor="let d of p.phaseDurations">
+                <td>{{ d.phaseName }}</td>
+                <td>{{ d.start }} - {{ d.end }}</td>
+            </tr>
+            </ng-template>
+        </table>
+    </ng-container>
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-icon-button (click)="refreshProgress()" aria-label="Refresh">
+        <mat-icon>refresh</mat-icon>
+    </button>
+    <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>  

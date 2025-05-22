@@ -1,0 +1,8 @@
+<div class="list">
+    <app-job-list-item
+      *ngFor="let j of jobs$ | async"
+      [job]="j"
+      (open)="openJob($event)"
+      (deleted)="reload()">
+    </app-job-list-item>
+</div>  

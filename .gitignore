@@ -41,4 +41,12 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-mr-web/node_modules/
+### Node ###
+./mr-web/node_modules/
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings

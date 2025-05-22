@@ -1,0 +1,9 @@
+<div class="dashboard">
+    <app-job-uploader (jobUploaded)="refreshList(jobListRef)"></app-job-uploader>
+  
+    <section class="jobs">
+      <h3>Your list of jobs</h3>
+      <!-- template ref #jobListRef чтобы дернуть .reload() при добавлении -->
+      <app-job-list #jobListRef></app-job-list>
+    </section>
+  </div>  

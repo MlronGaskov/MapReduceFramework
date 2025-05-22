@@ -1,0 +1,27 @@
+.dashboard {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+  
+    @media (max-width: 900px) {
+      grid-template-columns: 1fr;
+    }
+  
+    .jobs {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+  
+      h3 {
+        font-family: "Fira Sans", sans-serif;
+        font-weight: 600;
+        font-size: 1.75rem;
+        margin: 0.9rem 0 0.5rem 0;
+      }
+  
+      app-job-list {
+        flex: 1 1 auto;
+        overflow: hidden;
+      }
+    }
+  }  
