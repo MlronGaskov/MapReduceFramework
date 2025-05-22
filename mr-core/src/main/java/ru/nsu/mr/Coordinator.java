@@ -6,10 +6,14 @@ import ru.nsu.mr.config.Configuration;
 import ru.nsu.mr.config.ConfigurationOption;
 import ru.nsu.mr.endpoints.CoordinatorEndpoint;
 import ru.nsu.mr.endpoints.dto.JobInformation;
+import ru.nsu.mr.endpoints.dto.JobDetailInfo;
+import ru.nsu.mr.endpoints.dto.JobQueueInfo;
 import ru.nsu.mr.endpoints.dto.NewTaskDetails;
 import ru.nsu.mr.endpoints.dto.TaskDetails;
 import ru.nsu.mr.endpoints.dto.TaskInformation;
 import ru.nsu.mr.endpoints.dto.TaskType;
+import ru.nsu.mr.endpoints.dto.PhaseDuration;
+import ru.nsu.mr.endpoints.dto.JobProgressInfo;
 import ru.nsu.mr.gateway.WorkerGateway;
 import ru.nsu.mr.storages.StorageProvider;
 import ru.nsu.mr.storages.StorageProviderFactory;
@@ -27,19 +31,66 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.*;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.*;
+
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class Coordinator {
 
-    private enum Phase {
-        MAP,
-        REDUCE,
-        JOB_ENDED
+    private enum JobStatus { WAITING, RUNNING, FINISHED }
+    private enum Phase { MAP, REDUCE }
+    private enum JobTerminationStatus { OK, ABORTED }
+
+    private static final DateTimeFormatter TIME_FMT =
+            DateTimeFormatter.ofPattern("HH:mm:ss")
+                    .withZone(ZoneId.systemDefault());
+
+    private static class JobWrapper {
+        final Configuration config;
+        final Instant submissionTime;
+        JobStatus status;
+        Phase phase;
+        int finishedMappers;
+        int finishedReducers;
+        JobTerminationStatus terminationStatus;
+        Instant jobStartTime;
+        Instant mapEndTime;
+        Instant jobEndTime;
+
+        JobWrapper(Configuration cfg) {
+            this.config = cfg;
+            this.submissionTime = Instant.now();
+            this.status = JobStatus.WAITING;
+            this.finishedMappers = 0;
+            this.finishedReducers = 0;
+            this.terminationStatus = JobTerminationStatus.OK;
+        }
+
+        Integer totalTasks() {
+            if (status!= JobStatus.RUNNING) return null;
+            if (phase == Phase.MAP) return config.get(ConfigurationOption.MAPPERS_COUNT);
+            else return config.get(ConfigurationOption.REDUCERS_COUNT);
+        }
+
+        Integer completedTasks() {
+            if (status!= JobStatus.RUNNING) return null;
+            if (phase == Phase.MAP) return finishedMappers;
+            else return finishedReducers;
+        }
     }
+
+    private final List<JobWrapper> allJobs = new ArrayList<>();
+    private final BlockingQueue<JobWrapper> jobQueue = new LinkedBlockingQueue<>();
+    private JobWrapper currentJob;
+    private int executingTasksCount = 0;
 
     private static Logger LOGGER = null;
     private static LoggerContext context;
@@ -51,19 +102,11 @@ public class Coordinator {
     private final List<ConnectedWorker> workers = new ArrayList<>();
     private final Queue<NewTaskDetails> mapTaskQueue = new ConcurrentLinkedQueue<>();
     private final Queue<NewTaskDetails> reduceTaskQueue = new ConcurrentLinkedQueue<>();
-    private Configuration jobConfig;
 
-    private Phase currentPhase;
-    private int finishedMappersCount;
-    private int finishedReducersCount;
   
     private static final long HEARTBEAT_PERIOD_MS = 5000;
-    private static final long HEARTBEAT_TIMEOUT_MS = 2000;
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    private final Object jobLock = new Object();
-    private volatile boolean busy = false;
-    private volatile Configuration pendingJob = null;
 
     private static class FileSizePair {
         final String filename;
@@ -119,7 +162,13 @@ public class Coordinator {
                 coordinatorBaseUrl,
                 this::registerWorker,
                 this::receiveTaskCompletion,
-                this::submitJob);
+                this::submitJob,
+                this::getJobQueueInfo,
+                this::getJobDetailInfo,
+                this::deleteJob,
+                this::getJobProgressInfo,
+                this::getConnectedWorkersCount
+        );
         endpoint.startServer();
 
         heartbeatScheduler.scheduleAtFixedRate(
@@ -130,54 +179,54 @@ public class Coordinator {
         );
     }
 
-    public void setJobConfiguration(Configuration jobConfiguration) {
-        if (this.jobConfig != null) {
-            throw new IllegalStateException("Job configuration already set.");
-        }
-        this.jobConfig = jobConfiguration;
-    }
-
     public void setJobConfiguration(String yamlFilePath) throws IOException {
         ConfigurationLoader loader = new ConfigurationLoader(yamlFilePath);
         Configuration config = loader.getConfig();
-        setJobConfiguration(config);
+        currentJob = new JobWrapper(config);
     }
 
-    public void submitJob(Configuration job) {
-        if (busy) {
-            throw new IllegalStateException("Coordinator is busy");
-        }
-        synchronized (jobLock) {
-            pendingJob = job;
-            busy = true;
-            jobLock.notifyAll();
+    public void submitJob(Configuration config) {
+        JobWrapper w = new JobWrapper(config);
+        synchronized(allJobs) { allJobs.add(w); }
+        try {
+            jobQueue.put(w);
+            LOGGER.info("Job enqueued: {} at {}",
+                    config.get(ConfigurationOption.JOB_PATH),
+                    w.submissionTime
+            );
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Failed to enqueue job", e);
         }
     }
 
     private void executeJob() throws InterruptedException {
-        currentPhase = Phase.MAP;
-        finishedMappersCount = 0;
-        finishedReducersCount = 0;
+        currentJob = jobQueue.take();
+        currentJob.status = JobStatus.RUNNING;
+        currentJob.phase = Phase.MAP;
+        currentJob.jobStartTime = Instant.now();
         mapTaskQueue.clear();
         reduceTaskQueue.clear();
 
         LOGGER.info("Starting job with configuration: JOB_PATH={}, MAPPERS_COUNT={}, REDUCERS_COUNT={}",
-                jobConfig.get(ConfigurationOption.JOB_PATH),
-                jobConfig.get(ConfigurationOption.MAPPERS_COUNT),
-                jobConfig.get(ConfigurationOption.REDUCERS_COUNT));
+                currentJob.config.get(ConfigurationOption.JOB_PATH),
+                currentJob.config.get(ConfigurationOption.MAPPERS_COUNT),
+                currentJob.config.get(ConfigurationOption.REDUCERS_COUNT));
 
-        String jobPath = jobConfig.get(ConfigurationOption.JOB_PATH);
-        String jobStorageConnectionString = jobConfig.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING);
-        String dataStorageConnectionString = jobConfig.get(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING);
-        String inputsPath = jobConfig.get(ConfigurationOption.INPUTS_PATH);
-        String mappersOutputsPath = jobConfig.get(ConfigurationOption.MAPPERS_OUTPUTS_PATH);
-        String reducersOutputsPath = jobConfig.get(ConfigurationOption.REDUCERS_OUTPUTS_PATH);
-        int mappersCount = jobConfig.get(ConfigurationOption.MAPPERS_COUNT);
-        int reducersCount = jobConfig.get(ConfigurationOption.REDUCERS_COUNT);
-        int sorterInMemoryRecords = jobConfig.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS);
+        String jobName = currentJob.config.get(ConfigurationOption.JOB_NAME);
+        String jobPath = currentJob.config.get(ConfigurationOption.JOB_PATH);
+        String jobStorageConnectionString = currentJob.config.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING);
+        String dataStorageConnectionString = currentJob.config.get(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING);
+        String inputsPath = currentJob.config.get(ConfigurationOption.INPUTS_PATH);
+        String mappersOutputsPath = currentJob.config.get(ConfigurationOption.MAPPERS_OUTPUTS_PATH);
+        String reducersOutputsPath = currentJob.config.get(ConfigurationOption.REDUCERS_OUTPUTS_PATH);
+        int mappersCount = currentJob.config.get(ConfigurationOption.MAPPERS_COUNT);
+        int reducersCount = currentJob.config.get(ConfigurationOption.REDUCERS_COUNT);
+        int sorterInMemoryRecords = currentJob.config.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS);
 
         JobInformation jobInformation = new JobInformation(
                 1,
+                jobName,
                 jobPath,
                 jobStorageConnectionString,
                 mappersCount,
@@ -281,40 +330,31 @@ public class Coordinator {
         distributeTasks();
         waitForJobEnd();
         Thread.sleep(1000);
-      
-        heartbeatScheduler.shutdownNow();
-        endpoint.stopServer();
-      
-        LOGGER.info("Job has finished successfully.");
+
+        int idx = currentJob.config.get(ConfigurationOption.JOB_ID);
+        if (currentJob.terminationStatus.equals(JobTerminationStatus.ABORTED)) {
+            LOGGER.info("Job {} has been aborted.", idx);
+        } else {
+            LOGGER.info("Job {} has finished successfully.", idx);
+        }
     }
 
 
     public void start() throws InterruptedException {
-        if (jobConfig != null) {
+        if (currentJob != null) {
             executeJob();
             Thread.sleep(1000);
             endpoint.stopServer();
             heartbeatScheduler.shutdownNow();
         } else {
-            LOGGER.info("Starting job without initial configuration.");
+            LOGGER.info("Coordinator started, waiting for jobs...");
             while (!Thread.currentThread().isInterrupted()) {
-                synchronized (jobLock) {
-                    LOGGER.info("Waiting for job.");
-                    while (pendingJob == null) {
-                        jobLock.wait();
-                    }
-                    this.jobConfig = pendingJob;
-                    pendingJob = null;
-                }
                 try {
                     executeJob();
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
                 } catch (Exception e) {
-                    LOGGER.error("Job execution failed: {}", e.getMessage());
-                } finally {
-                    synchronized (jobLock) {
-                        busy = false;
-                        jobConfig = null;
-                    }
+                    LOGGER.error("Error during job execution: {}", e.getMessage(), e);
                 }
             }
         }
@@ -329,31 +369,49 @@ public class Coordinator {
     }
 
     private synchronized void receiveTaskCompletion(TaskDetails details) {
+        if (currentJob.terminationStatus.equals(JobTerminationStatus.ABORTED)) {
+            executingTasksCount --;
+            LOGGER.info("Task {} completed.", details.taskInformation().taskId());
+            if (executingTasksCount == 0) {
+                currentJob.status = JobStatus.FINISHED;
+                notifyAll();
+            }
+            workers.stream()
+                    .filter(w -> Objects.equals(w.currentTaskId, details.taskInformation().taskId()))
+                    .findFirst()
+                    .ifPresent(ConnectedWorker::release);
+            return;
+        }
         if ("SUCCEED".equals(details.status())) {
-            LOGGER.info("Task completed, on {}.", details.taskInformation().taskId());
+            executingTasksCount --;
+            LOGGER.info("Task {} completed.", details.taskInformation().taskId());
             if (details.taskInformation().taskType() == TaskType.MAP) {
-                finishedMappersCount++;
-                if (finishedMappersCount == jobConfig.get(ConfigurationOption.MAPPERS_COUNT)) {
-                    currentPhase = Phase.REDUCE;
+                currentJob.finishedMappers++;
+                if (currentJob.finishedMappers == currentJob.config.get(ConfigurationOption.MAPPERS_COUNT)) {
+                    currentJob.mapEndTime = Instant.now();
+                    currentJob.phase = Phase.REDUCE;
                     LOGGER.info("All MAP tasks completed. Transitioning to REDUCE phase.");
                 }
             } else {
-                finishedReducersCount++;
-                if (finishedReducersCount == jobConfig.get(ConfigurationOption.REDUCERS_COUNT)) {
-                    currentPhase = Phase.JOB_ENDED;
+                currentJob.finishedReducers++;
+                if (currentJob.finishedReducers == currentJob.config.get(ConfigurationOption.REDUCERS_COUNT)) {
+                    currentJob.jobEndTime = Instant.now();
+                    currentJob.status = JobStatus.FINISHED;
                     LOGGER.info("All REDUCE tasks completed. Job ended.");
                     notifyAll();
                 }
             }
         } else {
+            executingTasksCount --;
             NewTaskDetails failedTask = new NewTaskDetails(
                     new JobInformation(
                             1,
-                            jobConfig.get(ConfigurationOption.JOB_PATH),
-                            jobConfig.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING),
-                            jobConfig.get(ConfigurationOption.MAPPERS_COUNT),
-                            jobConfig.get(ConfigurationOption.REDUCERS_COUNT),
-                            jobConfig.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS)
+                            currentJob.config.get(ConfigurationOption.JOB_NAME),
+                            currentJob.config.get(ConfigurationOption.JOB_PATH),
+                            currentJob.config.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING),
+                            currentJob.config.get(ConfigurationOption.MAPPERS_COUNT),
+                            currentJob.config.get(ConfigurationOption.REDUCERS_COUNT),
+                            currentJob.config.get(ConfigurationOption.SORTER_IN_MEMORY_RECORDS)
                     ),
                     details.taskInformation()
             );
@@ -371,9 +429,12 @@ public class Coordinator {
     }
 
     private synchronized void distributeTasks() {
-        if (currentPhase == Phase.MAP) {
+        if (currentJob == null) {
+            return;
+        }
+        if (currentJob.phase == Phase.MAP) {
             assignTasksFromQueue(mapTaskQueue);
-        } else if (currentPhase == Phase.REDUCE) {
+        } else if (currentJob.phase == Phase.REDUCE) {
             assignTasksFromQueue(reduceTaskQueue);
         }
     }
@@ -388,6 +449,7 @@ public class Coordinator {
                 try {
                     worker.getGateway().createTask(task);
                     worker.assignTask(task);
+                    executingTasksCount ++;
                     LOGGER.info("Assigned task {} to worker {}",
                             task.taskInformation().taskId(), worker.workerBaseUrl);
                 } catch (IOException | InterruptedException e) {
@@ -402,6 +464,7 @@ public class Coordinator {
                 break;
             }
         }
+
     }
 
     private void checkAllWorkersHealth() {
@@ -443,9 +506,83 @@ public class Coordinator {
     }
 
     private synchronized void waitForJobEnd() throws InterruptedException {
-        while (currentPhase != Phase.JOB_ENDED) {
+        while (currentJob.status != JobStatus.FINISHED) {
             wait();
         }
+    }
+
+    public List<JobQueueInfo> getJobQueueInfo() {
+        synchronized(allJobs) {
+            return allJobs.stream()
+                    .map(w -> new JobQueueInfo(
+                            w.config.get(ConfigurationOption.JOB_ID),
+                            w.config.get(ConfigurationOption.JOB_NAME),
+                            TIME_FMT.format(w.submissionTime)
+                    ))
+                    .toList();
+        }
+    }
+
+    public JobDetailInfo getJobDetailInfo(int idx) {
+        synchronized(allJobs) {
+            JobWrapper w = allJobs.get(idx);
+
+            return new JobDetailInfo(
+                    w.config.get(ConfigurationOption.JOB_NAME),
+                    w.config.get(ConfigurationOption.JOB_STORAGE_CONNECTION_STRING),
+                    w.config.get(ConfigurationOption.DATA_STORAGE_CONNECTION_STRING),
+                    w.config.get(ConfigurationOption.INPUTS_PATH),
+                    w.config.get(ConfigurationOption.REDUCERS_OUTPUTS_PATH),
+                    w.config.get(ConfigurationOption.MAPPERS_COUNT),
+                    w.config.get(ConfigurationOption.REDUCERS_COUNT),
+                    getJobProgressInfo(idx)
+            );
+        }
+    }
+
+    public JobProgressInfo getJobProgressInfo(int idx) {
+        synchronized(allJobs) {
+            JobWrapper w = allJobs.get(idx);
+
+            List<PhaseDuration> pd = new ArrayList<>();
+            if (w.mapEndTime != null) {
+                String jobStartTime = TIME_FMT.format(w.jobStartTime);
+                String mapEndTime = TIME_FMT.format(w.mapEndTime);
+                pd.add(new PhaseDuration("MAP", jobStartTime, mapEndTime));
+            }
+            if (w.jobEndTime != null) {
+                String mapEndTime = TIME_FMT.format(w.mapEndTime);
+                String jobEndTime = TIME_FMT.format(w.submissionTime);
+                pd.add(new PhaseDuration("REDUCE", mapEndTime, jobEndTime));
+            }
+            List<PhaseDuration> phaseDurations = pd.isEmpty() ? null : pd;
+            return new JobProgressInfo(
+                    w.status.name(),
+                    w.status == JobStatus.FINISHED ? w.terminationStatus.name() : null,
+                    w.status == JobStatus.RUNNING ? w.phase.name() : null,
+                    w.totalTasks(),
+                    w.completedTasks(),
+                    phaseDurations
+            );
+        }
+    }
+
+    public synchronized int getConnectedWorkersCount() {
+        return workers.size();
+    }
+
+    public synchronized void deleteJob(int idx) {
+        if (idx < 0 || idx >= allJobs.size()) {
+            throw new IndexOutOfBoundsException();
+        }
+        JobWrapper w = allJobs.get(idx);
+        if (w == currentJob) {
+            mapTaskQueue.clear();
+            reduceTaskQueue.clear();
+            w.terminationStatus = JobTerminationStatus.ABORTED;
+        }
+        allJobs.remove(idx);
+        jobQueue.remove(w);
     }
 
     private void configureLogging(String logDestination) throws IOException, URISyntaxException {

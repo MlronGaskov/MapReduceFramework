@@ -25,4 +25,5 @@ public class CoordinatorGateway {
         HttpUtils.sendPostRequest(
                 httpClient, endpoint, taskDetails, Void.class, "Failed to notify task completion");
     }
+
 }

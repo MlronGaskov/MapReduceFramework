@@ -1,14 +1,14 @@
 package ru.nsu.mr.endpoints.dto;
 
-public record NewJobDetails(
-        int jobId,
+import java.util.List;
+
+public record JobDetailInfo(
         String jobName,
-        String jobPath,
         String jobStorageConnectionString,
-        String inputsPath,
-        String mappersOutputsPath,
-        String reducersOutputsPath,
         String dataStorageConnectionString,
+        String inputsPath,
+        String reducersOutputsPath,
         int mappersCount,
         int reducersCount,
-        int sorterInMemoryRecords) {}
+        JobProgressInfo progressInfo
+) {}
