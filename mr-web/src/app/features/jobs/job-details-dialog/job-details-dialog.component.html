@@ -5,12 +5,12 @@
 <mat-dialog-content>
     <ng-container *ngIf="(jobInfo$ | async) as info">
         <table class="table table-info">
-        <tr><th>Job storage type</th><td>{{ info.jobStorageType }}</td></tr>
-        <tr><th>Data storage type</th><td>{{ info.dataStorageType }}</td></tr>
+        <tr><th>Job storage type</th><td>{{ storageType(info.jobStorageConnectionString) }}</td></tr>
+        <tr><th>Data storage type</th><td>{{ storageType(info.dataStorageConnectionString) }}</td></tr>
         <tr><th>Input files path</th><td>{{ info.inputsPath }}</td></tr>
-        <tr><th>Output files path</th><td>{{ info.outputsPath }}</td></tr>
-        <tr><th>Mappers</th><td>{{ info.mappers }}</td></tr>
-        <tr><th>Reducers</th><td>{{ info.reducers }}</td></tr>
+        <tr><th>Output files path</th><td>{{ info.reducersOutputsPath }}</td></tr>
+        <tr><th>Mappers</th><td>{{ info.mappersCount }}</td></tr>
+        <tr><th>Reducers</th><td>{{ info.reducersCount }}</td></tr>
         </table>
     </ng-container>
 

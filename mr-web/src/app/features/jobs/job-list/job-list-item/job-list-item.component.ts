@@ -5,6 +5,7 @@ import { JobService } from '../../job.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 export interface JobSummary {
+  backendIndex: number;
   jobId: number;
   jobName: string;
   submissionTime: string;
@@ -30,7 +31,7 @@ export class JobListItemComponent {
   @Output() deleted = new EventEmitter<void>();
 
   delete(): void {
-  this.jobService.deleteJob(this.job.jobId - 1).subscribe({
+  this.jobService.deleteJob(this.job.backendIndex).subscribe({
     next: () => this.deleted.emit(),
     error: err => this.snack.open('Delete failed', 'Close', {duration: 3000}),
   });

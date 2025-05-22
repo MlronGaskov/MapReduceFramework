@@ -7,7 +7,6 @@ import { JobListItemComponent } from './job-list-item/job-list-item.component';
 import { JobService } from '../job.service';
 import { JobDetailsDialogComponent } from '../job-details-dialog/job-details-dialog.component';
 import { JobSummary } from './job-list-item/job-list-item.component';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 @Component({
   selector: 'app-job-list',
@@ -21,29 +20,16 @@ export class JobListComponent {
   constructor(
     private readonly jobService: JobService,
     private readonly dialog: MatDialog,
-    private readonly snack: MatSnackBar
   ) {}
 
-  openJob(jobId: number): void {
+  openJob(idx: number): void {
     this.dialog.open(JobDetailsDialogComponent, {
       width: '600px',
-      data: { jobId },
+      data: { idx },
     });
   }
 
-  // deleteJob(jobId: number): void {
-  //   this.jobService.deleteJob(jobId - 1).subscribe({
-  //     next: () => {
-  //       this.snack.open(`Job ${jobId} deleted`, 'Close', { duration: 3000 })
-  //       this.reload();
-  //     },  
-  //     error: err => this.snack.open('Delete failed', 'Close', { duration: 3000 }),
-  //   });
-  // }
-
   reload(): void {
-    console.log("Reload.");
     this.jobs$ = this.jobService.getJobs()
-    this.jobs$.forEach((j) => console.log(j));
   }
 }

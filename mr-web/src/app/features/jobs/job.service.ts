@@ -4,6 +4,8 @@ import { map, Observable } from "rxjs";
 
 import { JobSummary } from './job-list/job-list-item/job-list-item.component';
 
+declare const window: any;
+
 export type PhaseName = 'MAP' | 'REDUCE';
 export type JobStatus = 'RUNNING' | 'FINISHED' | 'WAITING';
 export type TerminationStatus = 'OK' | 'ABORTED';
@@ -28,14 +30,14 @@ export interface JobProgress {
 export interface JobInfo {
   jobName: string;
 
-  jobStorageType: string;
-  dataStorageType: string;
+  jobStorageConnectionString: string;
+  dataStorageConnectionString: string;
 
   inputsPath: string;
-  outputsPath: string; 
+  reducersOutputsPath: string; 
 
-  mappers:  number;
-  reducers: number;
+  mappersCount:  number;
+  reducersCount: number;
 
   progressInfo: JobProgress;
 }
@@ -57,14 +59,13 @@ export interface UploadJobRequest {
   sorterInMemoryRecords: number;
 }
 
-
 @Injectable({ providedIn: "root" })
 export class JobService {
   http = inject(HttpClient);
-  private coordinatorUrl = ''; 
+  private coordinatorUrl = window?.__env__?.apiUrl; 
 
-  setCoordinatorUrl(url: string): void {
-    this.coordinatorUrl = url.replace(/\/+$/, ''); // remove endings «/»
+  setCoordinatorUrl(): void {
+    this.coordinatorUrl = this.coordinatorUrl.replace(/\/+$/, ''); // remove endings «/»
   }
 
   private api(path: string): string {
@@ -75,7 +76,16 @@ export class JobService {
   }
 
   getJobs(): Observable<JobSummary[]> {
-    return this.http.get<JobSummary[]>(this.api('/jobs'));
+    return this.http.get<JobSummary[]>(this.api('/jobs')).pipe(
+      map(list =>
+        list.map((raw, idx) => ({
+          backendIndex: idx,
+          jobId : raw.jobId,
+          jobName : raw.jobName,
+          submissionTime : raw.submissionTime,
+        }))
+      )
+    );
   }
 
   deleteJob(id: number): Observable<void> {

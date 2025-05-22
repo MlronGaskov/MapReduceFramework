@@ -1,7 +1,7 @@
 <div class="row mat-elevation-z1">
     <span class="id">#{{ job.jobId }}</span>
   
-    <button mat-button class="name" (click)="open.emit(job.jobId)">
+    <button mat-button class="name" (click)="open.emit(job.backendIndex)">
       {{ job.jobName }}
     </button>
   

@@ -27,7 +27,6 @@ export class JobUploaderComponent {
     private readonly snack: MatSnackBar
   ) {
       this.form = this.fb.group({
-        coordinatorUrl: ['', [Validators.required]],
         jobId: [1,  Validators.required],
         jobName: ['', Validators.required],
 
@@ -41,7 +40,7 @@ export class JobUploaderComponent {
 
         mappersCount: [1,  [Validators.required, Validators.min(1)]],
         reducersCount: [1,  [Validators.required, Validators.min(1)]],
-        sorterInMemoryRecords: [1,  [Validators.required, Validators.min(1)]],
+        sorterInMemoryRecords: [10000,  [Validators.required, Validators.min(10000)]],
       });
   }
 
@@ -51,7 +50,7 @@ export class JobUploaderComponent {
       return;
     }
 
-    this.jobService.setCoordinatorUrl(this.form.value.coordinatorUrl!);
+    this.jobService.setCoordinatorUrl();
 
     const req: UploadJobRequest = {
       jobId: this.form.value.jobId,
@@ -71,7 +70,6 @@ export class JobUploaderComponent {
     };
 
     this.isSubmitting = true;
-    console.log(this.isSubmitting);
     this.jobService
       .uploadJob(req)
       .pipe(finalize(() => (this.isSubmitting = false)))

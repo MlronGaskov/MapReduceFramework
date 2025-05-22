@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
 
-interface DialogData { jobId: number; }
+interface DialogData { idx: number; }
 
 @Component({
   selector: 'app-job-details-dialog',
@@ -24,16 +24,19 @@ export class JobDetailsDialogComponent {
     @Inject(MAT_DIALOG_DATA) readonly data: DialogData,
     private readonly jobService: JobService
   ) {
+    this.loadStatic();
     this.refreshProgress();
   }
 
   private loadStatic(): void {
-    this.jobInfo$ = this.jobService.getJobInfo(this.data.jobId - 1);
-    console.log(this.jobInfo$);
+    this.jobInfo$ = this.jobService.getJobInfo(this.data.idx);
   }
 
   refreshProgress(): void {
-    this.loadStatic();
-    this.progress$ = this.jobService.getProgress(this.data.jobId - 1);
+    this.progress$ = this.jobService.getProgress(this.data.idx);
+  }
+
+  storageType(conn: string): string {
+    return conn.split(':')[0] == "S3" ? "S3" : "LOCAL";
   }
 }

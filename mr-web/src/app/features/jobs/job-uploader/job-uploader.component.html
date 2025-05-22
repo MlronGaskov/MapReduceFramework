@@ -3,16 +3,6 @@
   
     <form [formGroup]="form" (ngSubmit)="upload()">
       <mat-form-field appearance="fill" class="uploader__form">
-        <mat-label for="coordUrl">
-          Coordinator URL
-        </mat-label> 
-        <input id="coordUrl" class="uploader__form-input" matInput formControlName="coordinatorUrl" />        
-        <mat-error *ngIf="form.controls['coordinatorUrl'].hasError('required')">
-          URL required
-        </mat-error>
-      </mat-form-field>
-
-      <mat-form-field appearance="fill" class="uploader__form">
         <mat-label for="jobId">
           Job Id
         </mat-label>

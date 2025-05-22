@@ -10,11 +10,4 @@ export const routes: Routes = [
       }
   },
   { path: '**', redirectTo: '' }
-  // ,
-  // {
-  //     path: 'todos',
-  //     loadComponent() {
-  //         return import('./todos/todos.component').then((m) => m.TodosComponent)
-  //     }
-  // }
 ];
