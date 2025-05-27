@@ -1,14 +1,18 @@
 replicaCount:
   coordinator: 1
-  worker: 3
+  worker: 4
 
 image:
   coordinator:
     repository: cr.yandex/crp4f6o5uc8ueb8kh5sr/mr-app
-    tag: "1.2"
+    tag: "1.8"
   worker:
     repository: cr.yandex/crp4f6o5uc8ueb8kh5sr/mr-app
-    tag: "1.2"
+    tag: "1.8"
+  web:
+    repository: cr.yandex/crp4f6o5uc8ueb8kh5sr/mr-web
+    tag: "1.0"
+
 
 coordinator:
   service:
@@ -22,6 +26,11 @@ coordinator:
 worker: 
   service:
     port: 8090
+
+web:
+  service:
+    port: 80
+    type: NodePort
 
 elasticsearch:
   enabled: true

@@ -22,7 +22,7 @@ spec:
         - |
           echo "Waiting for coordinator to be ready..."
           until curl --silent --fail \
-            http://{{ include "mr-cluster.fullname" . }}-coordinator:{{ .Values.coordinator.service.port }}/health; do
+            http://{{ include "mr-cluster.fullname" . }}-coordinator:{{ .Values.coordinator.service.port }}/jobs; do
             echo "  still waiting..."
             sleep 5
           done

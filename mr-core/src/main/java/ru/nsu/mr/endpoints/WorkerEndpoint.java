@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 import static ru.nsu.mr.gateway.HttpUtils.sendJsonResponse;
 
@@ -33,6 +34,7 @@ public class WorkerEndpoint {
     public WorkerEndpoint(String workerBaseUrl, TaskService taskService) throws IOException {
         URI uri = URI.create(workerBaseUrl);
         server = HttpServer.create(new InetSocketAddress(uri.getHost(), uri.getPort()), 0);
+        server.setExecutor(Executors.newFixedThreadPool(10));
         server.createContext("/tasks", new TasksHandler());
         server.createContext("/health", new HealthHandler());
         this.taskService = taskService;

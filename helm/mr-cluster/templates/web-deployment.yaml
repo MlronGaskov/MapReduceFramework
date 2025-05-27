@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mr-cluster.fullname" . }}-web
+spec:
+  replicas: {{ .Values.replicaCount.coordinator }}
+  selector:
+    matchLabels:
+      app: {{ include "mr-cluster.fullname" . }}-web
+  template:
+    metadata:
+      labels:
+        app: {{ include "mr-cluster.fullname" . }}-web
+    spec:
+      containers:
+        - name: web-app
+          image: "{{ .Values.image.web.repository }}:{{ .Values.image.web.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: API_URL
+              value: 'http://192.168.58.2:30080/'

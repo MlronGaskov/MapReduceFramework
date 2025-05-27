@@ -245,7 +245,6 @@ public class Coordinator {
                 long size = storageProvider.getFileSize(file);
                 fileSizes.add(size);
                 totalSize += size;
-                LOGGER.debug("File: {}, Size: {} bytes", file, size); // Логирование размера каждого файла
             }
 
             // Размер данных на один маппер
@@ -297,11 +296,6 @@ public class Coordinator {
                         dataStorageConnectionString
                 );
 
-                // Логирование файлов для каждого воркера
-                LOGGER.info("Created MAP task {} with {} files (total size: {} bytes)",
-                        i, filesForMapper.size(), mapperSizes.get(i));
-                LOGGER.info("Files for MAP task {}: {}", i, filesForMapper); // Добавленная строка
-
                 NewTaskDetails newTask = new NewTaskDetails(jobInformation, taskInfo);
                 mapTaskQueue.add(newTask);
             }
@@ -324,7 +318,6 @@ public class Coordinator {
             );
             NewTaskDetails newTask = new NewTaskDetails(jobInformation, taskInfo);
             reduceTaskQueue.add(newTask);
-            LOGGER.info("Created REDUCE task {} with input files: {}", mappersCount + i, reduceInputs);
         }
 
         distributeTasks();
@@ -361,12 +354,20 @@ public class Coordinator {
     }
 
     private synchronized void registerWorker(String workerBaseUrl) {
-        ConnectedWorker worker = new ConnectedWorker(workerBaseUrl);
-        workers.add(worker);
+        workers.stream()
+                .filter(w -> w.workerBaseUrl.equals(workerBaseUrl))
+                .findFirst()
+                .ifPresent(this::handleDeadWorker);
+
+        ConnectedWorker newWorker = new ConnectedWorker(workerBaseUrl);
+        workers.add(newWorker);
+
         distributeTasks();
         notifyAll();
-        LOGGER.info("Worker registered, on {}.", workerBaseUrl);
+
+        LOGGER.info("Worker registered on {}.", workerBaseUrl);
     }
+
 
     private synchronized void receiveTaskCompletion(TaskDetails details) {
         if (currentJob.terminationStatus.equals(JobTerminationStatus.ABORTED)) {
@@ -467,17 +468,12 @@ public class Coordinator {
 
     }
 
-    private void checkAllWorkersHealth() {
-        List<ConnectedWorker> currentWorkers;
-        synchronized (this) {
-            currentWorkers = new ArrayList<>(workers);
-        }
+    private synchronized void checkAllWorkersHealth() {
+        for (int i = workers.size() - 1; i >= 0; i--) {
+            ConnectedWorker w = workers.get(i);
 
-        for (ConnectedWorker w : currentWorkers) {
             try {
                 if (!isWorkerAlive(w)) {
-                    LOGGER.warn("Worker {} is considered DEAD. Reassigning task.",
-                            w.workerBaseUrl);
                     handleDeadWorker(w);
                 }
             } catch (Exception e) {
@@ -492,6 +488,7 @@ public class Coordinator {
     }
 
     private synchronized void handleDeadWorker(ConnectedWorker worker) {
+        LOGGER.warn("Worker {} is considered DEAD.", worker.workerBaseUrl);
         workers.remove(worker);
         NewTaskDetails assignedTask = worker.getCurrentTaskDetails();
         if (assignedTask != null) {
@@ -552,7 +549,7 @@ public class Coordinator {
             }
             if (w.jobEndTime != null) {
                 String mapEndTime = TIME_FMT.format(w.mapEndTime);
-                String jobEndTime = TIME_FMT.format(w.submissionTime);
+                String jobEndTime = TIME_FMT.format(w.jobEndTime);
                 pd.add(new PhaseDuration("REDUCE", mapEndTime, jobEndTime));
             }
             List<PhaseDuration> phaseDurations = pd.isEmpty() ? null : pd;

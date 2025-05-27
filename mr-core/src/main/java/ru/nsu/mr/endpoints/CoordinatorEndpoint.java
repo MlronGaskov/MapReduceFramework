@@ -15,6 +15,7 @@ import ru.nsu.mr.gateway.HttpUtils;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.Function;
@@ -48,6 +49,7 @@ public class CoordinatorEndpoint {
             Supplier<Integer> onGetWorkerCount) throws IOException {
         URI uri = URI.create(coordinatorBaseUrl);
         this.httpServer = HttpServer.create(new InetSocketAddress(uri.getHost(), uri.getPort()), 0);
+        httpServer.setExecutor(Executors.newFixedThreadPool(10));
         this.onWorkerRegistration = onWorkerRegistration;
         this.onTaskNotification = onTaskNotification;
         this.onJobSubmission = onJobSubmission;
@@ -68,6 +70,8 @@ public class CoordinatorEndpoint {
                 .getFilters().add(cors);
         httpServer.createContext("/jobs", new JobsQueryHandler())
                 .getFilters().add(cors);
+        httpServer.createContext("/health", new HealthHandler())
+                .getFilters().add(cors);
     }
 
     public void startServer() {
@@ -76,6 +80,17 @@ public class CoordinatorEndpoint {
 
     public void stopServer() {
         httpServer.stop(0);
+    }
+
+    private static class HealthHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                HttpUtils.sendErrorResponse(exchange, STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed");
+                return;
+            }
+            HttpUtils.sendResponse(exchange, STATUS_OK, "OK");
+        }
     }
 
     private class WorkerRegistrationHandler implements HttpHandler {
